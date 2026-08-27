@@ -356,7 +356,39 @@ const initialFrameworkData = [
 type ViewMode = 'kanban' | 'focus' | 'detail' | 'report';
 type LangMode = 'KO' | 'EN';
 
-const dict = {
+interface DictType {
+  workspace: string;
+  projects: string;
+  focusViews: string;
+  addProjectBtn: string;
+  projPlaceholder: string;
+  kanbanView: string;
+  reportView: string;
+  kanbanGuide: string;
+  completed100: string;
+  inProgress: string;
+  focusGo: string;
+  editName: string;
+  addCard: string;
+  back: string;
+  focusModeTitle: string;
+  detailEdit: string;
+  progress: string;
+  formStatus: string;
+  notEntered: string;
+  prevCard: string;
+  nextCard: string;
+  firstCard: string;
+  lastCard: string;
+  selectAll: string;
+  deselectAll: string;
+  printPdf: string;
+  lightMode: string;
+  darkMode: string;
+  langToggle: string;
+}
+
+const dict: Record<LangMode, DictType> = {
   KO: {
     workspace: 'PASS 5 WORKSPACE',
     projects: 'Projects',
@@ -412,6 +444,8 @@ const dict = {
     nextCard: 'Next Card ▶',
     firstCard: 'First Card',
     lastCard: 'Last Card',
+    selectAll: 'Select All ✓',
+    deselectAll: 'Deselect All ✕',
     printPdf: '🖨️ Print / Save PDF',
     lightMode: '☀️ Light Mode',
     darkMode: '🌙 Dark Mode',
@@ -529,19 +563,19 @@ export default function Pass5MasterApp() {
       const cardStore = projStore[cardId] || {};
       const currentVal = cardStore[fieldId] || '';
       
-      setFieldModes({ ...fieldModes, [fieldId]: 'CUSTOM' });
-      setCustomInputs({ ...customInputs, [fieldId]: currentVal });
+      setFieldModes(prev => ({ ...prev, [fieldId]: 'CUSTOM' }));
+      setCustomInputs(prev => ({ ...prev, [fieldId]: currentVal }));
     } else if (val === '') {
       handleResetFieldValue(cardId, fieldId);
     } else {
-      setFieldModes({ ...fieldModes, [fieldId]: 'SELECT' });
+      setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
       updateFormValue(cardId, fieldId, val);
     }
   };
 
   const handleStartEditOption = (fieldId: string, currentVal: string) => {
-    setFieldModes({ ...fieldModes, [fieldId]: 'EDIT' });
-    setCustomInputs({ ...customInputs, [fieldId]: currentVal });
+    setFieldModes(prev => ({ ...prev, [fieldId]: 'EDIT' }));
+    setCustomInputs(prev => ({ ...prev, [fieldId]: currentVal }));
   };
 
   const handleCustomSubmit = (cardId: string, fieldId: string, isEdit: boolean = false) => {
@@ -552,15 +586,15 @@ export default function Pass5MasterApp() {
     if (savePermanently[fieldId]) {
       const currentAdded = customOptions[fieldId] || [];
       if (!currentAdded.includes(text)) {
-        setCustomOptions({
-          ...customOptions,
+        setCustomOptions(prev => ({
+          ...prev,
           [fieldId]: [...currentAdded, text]
-        });
+        }));
       }
     }
 
-    setFieldModes({ ...fieldModes, [fieldId]: 'SELECT' });
-    setCustomInputs({ ...customInputs, [fieldId]: '' });
+    setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
+    setCustomInputs(prev => ({ ...prev, [fieldId]: '' }));
   };
 
   const handleResetFieldValue = (cardId: string, fieldId: string) => {
@@ -569,21 +603,21 @@ export default function Pass5MasterApp() {
     const newCardStore = { ...cardStore };
     delete newCardStore[fieldId];
 
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [activeProjectId]: {
         ...projStore,
         [cardId]: newCardStore
       }
-    });
-    setFieldModes({ ...fieldModes, [fieldId]: 'SELECT' });
+    }));
+    setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
   };
 
   const updateFormValue = (cardId: string, fieldId: string, value: string) => {
     const projStore = formData[activeProjectId] || {};
     const cardStore = projStore[cardId] || {};
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [activeProjectId]: {
         ...projStore,
         [cardId]: {
@@ -591,10 +625,11 @@ export default function Pass5MasterApp() {
           [fieldId]: value
         }
       }
-    });
+    }));
   };
 
   const getCardProgress = (card: any) => {
+    if (!card || !card.fields) return 0;
     const projStore = formData[activeProjectId] || {};
     const cardStore = projStore[card.id] || {};
     const totalFields = card.fields.length;
@@ -612,7 +647,7 @@ export default function Pass5MasterApp() {
     e.preventDefault();
     if (!newProjName.trim()) return;
     const newProj = { id: Date.now(), name: newProjName.trim() };
-    setProjects([...projects, newProj]);
+    setProjects(prev => [...prev, newProj]);
     setActiveProjectId(newProj.id);
     setNewProjName('');
     setIsAddingProject(false);
@@ -624,12 +659,12 @@ export default function Pass5MasterApp() {
     const newProj = { id: newId, name: newName };
 
     const targetFormData = formData[proj.id] || {};
-    setFormData({
-      ...formData,
+    setFormData(prev => ({
+      ...prev,
       [newId]: JSON.parse(JSON.stringify(targetFormData))
-    });
+    }));
 
-    setProjects([...projects, newProj]);
+    setProjects(prev => [...prev, newProj]);
     setActiveProjectId(newId);
   };
 
@@ -647,20 +682,20 @@ export default function Pass5MasterApp() {
 
   const handleCommitSidebarProjectName = (projId: number) => {
     if (sidebarTempName.trim()) {
-      setProjects(projects.map(p => p.id === projId ? { ...p, name: sidebarTempName.trim() } : p));
+      setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: sidebarTempName.trim() } : p));
     }
     setSidebarEditingProjId(null);
   };
 
   const handleCommitHeaderProjectName = (projId: number) => {
     if (headerTempName.trim()) {
-      setProjects(projects.map(p => p.id === projId ? { ...p, name: headerTempName.trim() } : p));
+      setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: headerTempName.trim() } : p));
     }
     setHeaderEditingProjId(null);
   };
 
   const handleCommitStepMeta = (stepKey: string) => {
-    const updated = frameworkData.map(step => {
+    setFrameworkData(prev => prev.map(step => {
       if (step.stepKey === stepKey) {
         return {
           ...step,
@@ -669,8 +704,7 @@ export default function Pass5MasterApp() {
         };
       }
       return step;
-    });
-    setFrameworkData(updated);
+    }));
     setEditingStepMetaKey(null);
   };
 
@@ -681,6 +715,7 @@ export default function Pass5MasterApp() {
 
   const handleProjectDrop = (e: React.DragEvent, targetProjId: number) => {
     e.preventDefault();
+    e.stopPropagation();
     if (draggedProjectId === null || draggedProjectId === targetProjId) return;
 
     const projList = [...projects];
@@ -706,37 +741,44 @@ export default function Pass5MasterApp() {
 
   const handleDrop = (e: React.DragEvent, targetStepKey: string, targetCardId?: string) => {
     e.preventDefault();
+    e.stopPropagation();
     if (!draggedCardId) return;
 
-    let movedCard: any = null;
-    const newFramework = frameworkData.map(step => {
-      const filteredCards = step.cards.filter(c => {
-        if (c.id === draggedCardId) {
-          movedCard = c;
-          return false;
-        }
-        return true;
-      });
-      return { ...step, cards: filteredCards };
-    });
+    setFrameworkData(prevFramework => {
+      let movedCard: any = null;
 
-    if (movedCard) {
-      newFramework.forEach(step => {
+      const cleanedFramework = prevFramework.map(step => {
+        const filteredCards = step.cards.filter(c => {
+          if (c.id === draggedCardId) {
+            movedCard = c;
+            return false;
+          }
+          return true;
+        });
+        return { ...step, cards: filteredCards };
+      });
+
+      if (!movedCard) return prevFramework;
+
+      return cleanedFramework.map(step => {
         if (step.stepKey === targetStepKey) {
+          const newCards = [...step.cards];
           if (targetCardId) {
-            const targetIdx = step.cards.findIndex(c => c.id === targetCardId);
+            const targetIdx = newCards.findIndex(c => c.id === targetCardId);
             if (targetIdx !== -1) {
-              step.cards.splice(targetIdx, 0, movedCard);
+              newCards.splice(targetIdx, 0, movedCard);
             } else {
-              step.cards.push(movedCard);
+              newCards.push(movedCard);
             }
           } else {
-            step.cards.push(movedCard);
+            newCards.push(movedCard);
           }
+          return { ...step, cards: newCards };
         }
+        return step;
       });
-      setFrameworkData(newFramework);
-    }
+    });
+
     setDraggedCardId(null);
   };
 
@@ -746,10 +788,11 @@ export default function Pass5MasterApp() {
 
   const handleFieldDrop = (e: React.DragEvent, cardId: string, targetFieldId: string) => {
     e.preventDefault();
+    e.stopPropagation();
     const sourceFieldId = e.dataTransfer.getData('text/field');
     if (!sourceFieldId || sourceFieldId === targetFieldId) return;
 
-    const updated = frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -764,8 +807,7 @@ export default function Pass5MasterApp() {
         }
         return card;
       })
-    }));
-    setFrameworkData(updated);
+    })));
   };
 
   const handleCreateCard = (stepKey: string) => {
@@ -790,7 +832,7 @@ export default function Pass5MasterApp() {
       ]
     };
 
-    setFrameworkData(frameworkData.map(step => {
+    setFrameworkData(prev => prev.map(step => {
       if (step.stepKey === stepKey) {
         return { ...step, cards: [...step.cards, newCard] };
       }
@@ -804,14 +846,23 @@ export default function Pass5MasterApp() {
   };
 
   const handleDeleteCard = (cardId: string) => {
-    setFrameworkData(frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.filter(c => c.id !== cardId)
     })));
+
+    if (activeCardId === cardId) {
+      const remaining = allFlattenedCards.filter(item => item.card.id !== cardId);
+      if (remaining.length > 0) {
+        setActiveCardId(remaining[0].card.id);
+      } else {
+        setViewMode('kanban');
+      }
+    }
   };
 
   const handleSaveCardMeta = (cardId: string) => {
-    const updated = frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -823,8 +874,7 @@ export default function Pass5MasterApp() {
         }
         return card;
       })
-    }));
-    setFrameworkData(updated);
+    })));
     setEditingCardId(null);
   };
 
@@ -832,7 +882,7 @@ export default function Pass5MasterApp() {
     if (!newFieldLabel.trim()) return;
     const opts = newFieldOptionsStr.split(',').map(o => o.trim()).filter(Boolean);
 
-    const updated = frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -848,16 +898,15 @@ export default function Pass5MasterApp() {
         }
         return card;
       })
-    }));
+    })));
 
-    setFrameworkData(updated);
     setNewFieldLabel('');
     setNewFieldOptionsStr('');
     setEditingFieldCardId(null);
   };
 
   const handleDeleteFieldFromCard = (cardId: string, fieldId: string) => {
-    const updated = frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -868,13 +917,12 @@ export default function Pass5MasterApp() {
         }
         return card;
       })
-    }));
-    setFrameworkData(updated);
+    })));
   };
 
   const handleUpdateFieldLabel = (cardId: string, fieldId: string) => {
     if (!tempFieldLabel.trim()) return;
-    const updated = frameworkData.map(step => ({
+    setFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -885,8 +933,7 @@ export default function Pass5MasterApp() {
         }
         return card;
       })
-    }));
-    setFrameworkData(updated);
+    })));
     setEditingFieldId(null);
     setTempFieldLabel('');
   };
@@ -1093,9 +1140,9 @@ export default function Pass5MasterApp() {
         </aside>
 
         {/* 메인 콘텐츠 영역 */}
-        <main className={`flex-1 flex flex-col p-8 overflow-y-auto ${isDark ? 'bg-[#18181b] scrollbar-dark' : 'bg-[#fafaf9] scrollbar-light'}`}>
+        <main className={`flex-1 flex flex-col p-8 overflow-y-auto ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
           
-          <style jsx global>{`
+          <style>{`
             ::-webkit-scrollbar {
               width: 8px;
               height: 8px;
@@ -1728,7 +1775,7 @@ export default function Pass5MasterApp() {
                                   <div className="flex gap-2">
                                     <button
                                       type="button"
-                                      onClick={() => setFieldModes({ ...fieldModes, [field.id]: 'SELECT' })}
+                                      onClick={() => setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }))}
                                       className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg"
                                     >
                                       취소
@@ -1866,7 +1913,7 @@ export default function Pass5MasterApp() {
                 <div className="flex items-center gap-3">
                   <button 
                     onClick={handleGoBack}
-                    className="font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 px-3 py-1.5 rounded-lg transition"
+                    className="font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 px-3 py-1.5 rounded-xl transition"
                   >
                     {t.back}
                   </button>
@@ -2029,7 +2076,7 @@ export default function Pass5MasterApp() {
                 </span>
 
                 {(() => {
-                  let itemsToRender: { field: any; stepTitle: string; cardTitle: string }[] = [];
+                  let itemsToRender: { field: any; stepTitle: string; cardTitle: string; cardId: string }[] = [];
 
                   if (query) {
                     frameworkData.forEach(step => {
@@ -2043,7 +2090,8 @@ export default function Pass5MasterApp() {
                             itemsToRender.push({
                               field,
                               stepTitle: step.title,
-                              cardTitle: card.title
+                              cardTitle: card.title,
+                              cardId: card.id
                             });
                           }
                         });
@@ -2059,7 +2107,8 @@ export default function Pass5MasterApp() {
                         itemsToRender.push({
                           field,
                           stepTitle: selectedStepObj.title,
-                          cardTitle: currentPickerCard.title
+                          cardTitle: currentPickerCard.title,
+                          cardId: currentPickerCard.id
                         });
                       });
                     }
@@ -2069,8 +2118,8 @@ export default function Pass5MasterApp() {
                     return <div className="text-xs opacity-40 py-8 text-center">검색 결과가 없습니다. 다른 키워드로 검색해 보세요.</div>;
                   }
 
-                  return itemsToRender.map(({ field, stepTitle, cardTitle }, idx) => {
-                    const allOpts = getFieldOptions(field, field.id);
+                  return itemsToRender.map(({ field, stepTitle, cardTitle, cardId }, idx) => {
+                    const allOpts = getFieldOptions(field, cardId);
                     const displayOpts = allOpts;
                     const isAllSelected = displayOpts.length > 0 && displayOpts.every((opt: string) => selectedPickedOptions.includes(opt));
 
@@ -2145,7 +2194,7 @@ export default function Pass5MasterApp() {
                       setPickerSearchQuery('');
                       setIsPickerOpen(false);
                     }}
-                    className="px-4 py-2 text-xs rounded-xl bg-zinc-600 text-white"
+                    className="px-4 py-2 text-xs rounded-lg bg-zinc-600 text-white"
                   >
                     취소
                   </button>
@@ -2160,10 +2209,11 @@ export default function Pass5MasterApp() {
                         updated[pickerTargetFieldIndex].optionsStr = existing ? `${existing}, ${joinedStr}` : joinedStr;
                         setNewCardFields(updated);
                       } else if (pickerTargetType === 'existingField' && pickerTargetFieldId) {
-                        const updatedFramework = frameworkData.map(step => ({
+                        setFrameworkData(prev => prev.map(step => ({
                           ...step,
                           cards: step.cards.map(card => {
-                            if (card.id === activeCardObj?.id) {
+                            const hasTargetField = card.fields.some((f: any) => f.id === pickerTargetFieldId);
+                            if (hasTargetField) {
                               return {
                                 ...card,
                                 fields: card.fields.map((f: any) => {
@@ -2177,14 +2227,13 @@ export default function Pass5MasterApp() {
                             }
                             return card;
                           })
-                        }));
-                        setFrameworkData(updatedFramework);
+                        })));
                       }
                       setSelectedPickedOptions([]);
                       setPickerSearchQuery('');
                       setIsPickerOpen(false);
                     }}
-                    className="px-5 py-2 text-xs font-bold rounded-xl bg-blue-600 hover:bg-blue-500 text-white"
+                    className="px-5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
                   >
                     선택한 옵션 합치기 / 가져오기
                   </button>
