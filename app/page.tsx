@@ -1,6 +1,12 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { createClient } from '@supabase/supabase-js';
+
+// Supabase 초기화 (실제 환경에서는 .env.local에 환경변수로 숨겨야 해)
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 // PASS 5 단계별 카드 및 세부 점검 필드 기본 데이터 (의사결정 중심 질문형 구성)
 const initialFrameworkData = [
@@ -454,6 +460,33 @@ const dict: Record<LangMode, DictType> = {
 };
 
 export default function Pass5MasterApp() {
+  const [user, setUser] = useState<any>(null);
+  
+  useEffect(() => {
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      setUser(session?.user ?? null);
+    });
+
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+      setUser(session?.user ?? null);
+    });
+
+    return () => subscription.unsubscribe();
+  }, []);
+
+  const handleGoogleLogin = async () => {
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: {
+        redirectTo: typeof window !== 'undefined' ? window.location.origin : undefined
+      }
+    });
+  };
+
+  const handleLogout = async () => {
+    await supabase.auth.signOut();
+  };
+
   const [isDark, setIsDark] = useState(true);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [lang, setLang] = useState<LangMode>('KO');
@@ -1192,6 +1225,20 @@ export default function Pass5MasterApp() {
             </div>
 
             <div className="flex items-center gap-3 text-xs">
+              {/* 추가된 구글 로그인 / 로그아웃 UI */}
+              {user ? (
+                <div className="flex items-center gap-2 mr-4">
+                  <span className="opacity-70 text-[11px]">{user.email}</span>
+                  <button onClick={handleLogout} className={`px-2 py-1 rounded transition ${isDark ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white' : 'bg-rose-100 text-rose-600 hover:bg-rose-500 hover:text-white'}`}>
+                    로그아웃
+                  </button>
+                </div>
+              ) : (
+                <button onClick={handleGoogleLogin} className={`mr-4 px-3 py-1.5 rounded font-bold transition flex items-center gap-1.5 ${isDark ? 'bg-white text-zinc-900 hover:bg-zinc-200' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
+                  <span className="text-blue-500">G</span> 구글 로그인
+                </button>
+              )}
+
               <button 
                 onClick={() => navigateTo('kanban')} 
                 className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
