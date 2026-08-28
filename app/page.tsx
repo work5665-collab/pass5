@@ -474,6 +474,50 @@ export default function Pass5MasterApp() {
     return () => subscription.unsubscribe();
   }, []);
 
+  const loadProjects = async (userId: string) => {
+    setIsProjectsLoading(true);
+
+    const { data, error } = await supabase
+      .from('projects')
+      .select('id, name, created_by, created_at')
+      .order('created_at', { ascending: true });
+
+    if (error) {
+      console.error('프로젝트 불러오기 실패:', error);
+      alert(`프로젝트를 불러오지 못했습니다.\n${error.message}`);
+      setProjects([]);
+      setActiveProjectId(null);
+      setIsProjectsLoading(false);
+      return;
+    }
+
+    const loadedProjects = (data || []) as Project[];
+    setProjects(loadedProjects);
+
+    if (loadedProjects.length > 0) {
+      setActiveProjectId(prev =>
+        prev && loadedProjects.some(project => project.id === prev)
+          ? prev
+          : loadedProjects[0].id
+      );
+    } else {
+      setActiveProjectId(null);
+    }
+
+    setIsProjectsLoading(false);
+  };
+
+  useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      setActiveProjectId(null);
+      setIsProjectsLoading(false);
+      return;
+    }
+
+    loadProjects(user.id);
+  }, [user]);
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -492,21 +536,25 @@ export default function Pass5MasterApp() {
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
 
-  // 폴더화 및 프로젝트 관리 상태
+  type Project = {
+    id: string;
+    name: string;
+    created_by: string;
+    created_at: string;
+  };
+
   const [isFolderOpen, setIsFolderOpen] = useState(true);
-  const [projects, setProjects] = useState([
-    { id: 1, name: '뮤지엄 아카이빙 루프 영상 프로젝트' },
-    { id: 2, name: '마곡동 뷔페 메뉴 추적 앱 개발' },
-  ]);
-  const [activeProjectId, setActiveProjectId] = useState(1);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
+  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
   
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjName, setNewProjName] = useState('');
   
-  const [sidebarEditingProjId, setSidebarEditingProjId] = useState<number | null>(null);
+  const [sidebarEditingProjId, setSidebarEditingProjId] = useState<string | null>(null);
   const [sidebarTempName, setSidebarTempName] = useState('');
 
-  const [headerEditingProjId, setHeaderEditingProjId] = useState<number | null>(null);
+  const [headerEditingProjId, setHeaderEditingProjId] = useState<string | null>(null);
   const [headerTempName, setHeaderTempName] = useState('');
 
   const [frameworkData, setFrameworkData] = useState(initialFrameworkData);
@@ -543,7 +591,7 @@ export default function Pass5MasterApp() {
   const [pickerTargetFieldId, setPickerTargetFieldId] = useState<string | null>(null);
 
   const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
-  const [draggedProjectId, setDraggedProjectId] = useState<number | null>(null);
+  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
 
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [focusStepKey, setFocusStepKey] = useState<string>('Input');
@@ -570,7 +618,7 @@ export default function Pass5MasterApp() {
   };
 
   const [customOptions, setCustomOptions] = useState<Record<string, string[]>>({});
-  const [formData, setFormData] = useState<Record<number, Record<string, Record<string, string>>>>({});
+  const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [fieldModes, setFieldModes] = useState<Record<string, 'SELECT' | 'CUSTOM' | 'EDIT'>>({});
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [savePermanently, setSavePermanently] = useState<Record<string, boolean>>({});
@@ -676,54 +724,141 @@ export default function Pass5MasterApp() {
     return Math.round((filledCount / totalFields) * 100);
   };
 
-  const handleAddProject = (e: React.FormEvent) => {
+  const handleAddProject = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newProjName.trim()) return;
-    const newProj = { id: Date.now(), name: newProjName.trim() };
-    setProjects(prev => [...prev, newProj]);
-    setActiveProjectId(newProj.id);
+
+    const projectName = newProjName.trim();
+    if (!projectName) return;
+
+    if (!user) {
+      alert('로그인이 필요합니다.');
+      return;
+    }
+
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        name: projectName,
+        created_by: user.id,
+      })
+      .select('id, name, created_by, created_at')
+      .single();
+
+    if (error) {
+      console.error('프로젝트 생성 실패:', error);
+      alert(`프로젝트를 만들지 못했습니다.\n${error.message}`);
+      return;
+    }
+
+    const newProject = data as Project;
+    setProjects(prev => [...prev, newProject]);
+    setActiveProjectId(newProject.id);
     setNewProjName('');
     setIsAddingProject(false);
   };
 
-  const handleDuplicateProject = (proj: { id: number; name: string }) => {
-    const newId = Date.now();
-    const newName = `${proj.name} (복제됨)`;
-    const newProj = { id: newId, name: newName };
+  const handleDuplicateProject = async (proj: Project) => {
+    if (!user) return;
 
+    const newName = `${proj.name} (복제됨)`;
+
+    const { data, error } = await supabase
+      .from('projects')
+      .insert({
+        name: newName,
+        created_by: user.id,
+      })
+      .select('id, name, created_by, created_at')
+      .single();
+
+    if (error) {
+      console.error('프로젝트 복제 실패:', error);
+      alert(`프로젝트를 복제하지 못했습니다.\n${error.message}`);
+      return;
+    }
+
+    const newProject = data as Project;
     const targetFormData = formData[proj.id] || {};
+
     setFormData(prev => ({
       ...prev,
-      [newId]: JSON.parse(JSON.stringify(targetFormData))
+      [newProject.id]: JSON.parse(JSON.stringify(targetFormData))
     }));
 
-    setProjects(prev => [...prev, newProj]);
-    setActiveProjectId(newId);
+    setProjects(prev => [...prev, newProject]);
+    setActiveProjectId(newProject.id);
   };
 
-  const handleDeleteProject = (projId: number) => {
+  const handleDeleteProject = async (projId: string) => {
     if (projects.length <= 1) {
       alert('마지막 프로젝트는 삭제할 수 없습니다.');
       return;
     }
+
+    const { error } = await supabase
+      .from('projects')
+      .delete()
+      .eq('id', projId);
+
+    if (error) {
+      console.error('프로젝트 삭제 실패:', error);
+      alert(`프로젝트를 삭제하지 못했습니다.\n${error.message}`);
+      return;
+    }
+
     const filtered = projects.filter(p => p.id !== projId);
     setProjects(filtered);
+
     if (activeProjectId === projId) {
-      setActiveProjectId(filtered[0].id);
+      setActiveProjectId(filtered[0]?.id ?? null);
     }
   };
 
-  const handleCommitSidebarProjectName = (projId: number) => {
-    if (sidebarTempName.trim()) {
-      setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: sidebarTempName.trim() } : p));
+  const handleCommitSidebarProjectName = async (projId: string) => {
+    const projectName = sidebarTempName.trim();
+
+    if (!projectName) {
+      setSidebarEditingProjId(null);
+      return;
     }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ name: projectName })
+      .eq('id', projId);
+
+    if (error) {
+      console.error('프로젝트 이름 수정 실패:', error);
+      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
+      setSidebarEditingProjId(null);
+      return;
+    }
+
+    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: projectName } : p));
     setSidebarEditingProjId(null);
   };
 
-  const handleCommitHeaderProjectName = (projId: number) => {
-    if (headerTempName.trim()) {
-      setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: headerTempName.trim() } : p));
+  const handleCommitHeaderProjectName = async (projId: string) => {
+    const projectName = headerTempName.trim();
+
+    if (!projectName) {
+      setHeaderEditingProjId(null);
+      return;
     }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ name: projectName })
+      .eq('id', projId);
+
+    if (error) {
+      console.error('프로젝트 이름 수정 실패:', error);
+      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
+      setHeaderEditingProjId(null);
+      return;
+    }
+
+    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: projectName } : p));
     setHeaderEditingProjId(null);
   };
 
@@ -741,12 +876,12 @@ export default function Pass5MasterApp() {
     setEditingStepMetaKey(null);
   };
 
-  const handleProjectDragStart = (e: React.DragEvent, projId: number) => {
+  const handleProjectDragStart = (e: React.DragEvent, projId: string) => {
     setDraggedProjectId(projId);
     e.dataTransfer.setData('text/plain', `proj_${projId}`);
   };
 
-  const handleProjectDrop = (e: React.DragEvent, targetProjId: number) => {
+  const handleProjectDrop = (e: React.DragEvent, targetProjId: string) => {
     e.preventDefault();
     e.stopPropagation();
     if (draggedProjectId === null || draggedProjectId === targetProjId) return;
@@ -995,6 +1130,52 @@ export default function Pass5MasterApp() {
     });
   });
 
+  if (!user) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
+        <div className={`w-full max-w-md p-8 rounded-2xl border text-center ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
+          <div className="text-xs font-bold text-blue-500 tracking-widest mb-2">PASS 5 WORKSPACE</div>
+          <h1 className="text-2xl font-black mb-3">프로젝트 협업 관리</h1>
+          <p className="text-xs opacity-60 mb-6">Google 계정으로 로그인하면 프로젝트를 만들고 협업할 수 있습니다.</p>
+          <button onClick={handleGoogleLogin} className="w-full px-4 py-3 rounded-xl bg-white text-zinc-900 font-bold hover:bg-zinc-200 transition">
+            <span className="text-blue-500 mr-2">G</span> Google로 로그인
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  if (isProjectsLoading) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
+        <div className="text-sm opacity-60">프로젝트를 불러오는 중...</div>
+      </div>
+    );
+  }
+
+  if (!activeProject) {
+    return (
+      <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
+        <div className={`w-full max-w-lg p-8 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
+          <div className="text-xs font-bold text-blue-500 tracking-widest mb-2">PASS 5 WORKSPACE</div>
+          <h1 className="text-2xl font-black mb-2">첫 프로젝트를 만들어보세요</h1>
+          <p className="text-xs opacity-60 mb-6">프로젝트를 생성하면 이 계정이 자동으로 관리자(admin)가 됩니다.</p>
+          <form onSubmit={handleAddProject} className="flex gap-2">
+            <input
+              autoFocus
+              value={newProjName}
+              onChange={(e) => setNewProjName(e.target.value)}
+              placeholder={t.projPlaceholder}
+              className={`flex-1 px-3 py-2.5 text-sm rounded-xl border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+            />
+            <button type="submit" className="px-5 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold">생성</button>
+          </form>
+          <button onClick={handleLogout} className="mt-4 text-xs opacity-50 hover:opacity-100">로그아웃</button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className={`min-h-screen flex flex-col justify-between transition-colors duration-200 ${isDark ? 'bg-[#18181b] text-[#f4f4f5]' : 'bg-[#fafaf9] text-[#18181b]'}`}>
       <div className="flex flex-1 overflow-hidden">
@@ -1225,7 +1406,6 @@ export default function Pass5MasterApp() {
             </div>
 
             <div className="flex items-center gap-3 text-xs">
-              {/* 추가된 구글 로그인 / 로그아웃 UI */}
               {user ? (
                 <div className="flex items-center gap-2 mr-4">
                   <span className="opacity-70 text-[11px]">{user.email}</span>
@@ -2249,40 +2429,30 @@ export default function Pass5MasterApp() {
                     onClick={() => {
                       const joinedStr = selectedPickedOptions.join(', ');
                       if (pickerTargetType === 'newField') {
-                        setNewFieldOptionsStr(prev => prev ? `${prev}, ${joinedStr}` : joinedStr);
+                        setNewFieldOptionsStr(joinedStr);
                       } else if (pickerTargetType === 'newCardField' && pickerTargetFieldIndex !== null) {
                         const updated = [...newCardFields];
-                        const existing = updated[pickerTargetFieldIndex].optionsStr;
-                        updated[pickerTargetFieldIndex].optionsStr = existing ? `${existing}, ${joinedStr}` : joinedStr;
+                        updated[pickerTargetFieldIndex].optionsStr = joinedStr;
                         setNewCardFields(updated);
                       } else if (pickerTargetType === 'existingField' && pickerTargetFieldId) {
-                        setFrameworkData(prev => prev.map(step => ({
-                          ...step,
-                          cards: step.cards.map(card => {
-                            const hasTargetField = card.fields.some((f: any) => f.id === pickerTargetFieldId);
-                            if (hasTargetField) {
-                              return {
-                                ...card,
-                                fields: card.fields.map((f: any) => {
-                                  if (f.id === pickerTargetFieldId) {
-                                    const mergedOpts = Array.from(new Set([...f.options, ...selectedPickedOptions]));
-                                    return { ...f, options: mergedOpts };
-                                  }
-                                  return f;
-                                })
-                              };
-                            }
-                            return card;
-                          })
-                        })));
+                        const targetFieldId = pickerTargetFieldId;
+                        selectedPickedOptions.forEach(opt => {
+                          const currentAdded = customOptions[targetFieldId] || [];
+                          if (!currentAdded.includes(opt)) {
+                            setCustomOptions(prev => ({
+                              ...prev,
+                              [targetFieldId]: [...currentAdded, opt]
+                            }));
+                          }
+                        });
                       }
                       setSelectedPickedOptions([]);
                       setPickerSearchQuery('');
                       setIsPickerOpen(false);
                     }}
-                    className="px-5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white"
+                    className="px-5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-md transition"
                   >
-                    선택한 옵션 합치기 / 가져오기
+                    선택한 옵션 적용하기 ({selectedPickedOptions.length})
                   </button>
                 </div>
               </div>
@@ -2291,25 +2461,6 @@ export default function Pass5MasterApp() {
         );
       })()}
 
-      {/* 하단 고정 영역 */}
-      <footer className={`py-3 px-6 text-xs flex justify-between items-center border-t ${isDark ? 'bg-[#18181b] border-zinc-800 text-zinc-400' : 'bg-[#fafaf9] border-zinc-200 text-zinc-600'}`}>
-        <div className="opacity-60 text-[11px]">PASS 5 Framework Engine v2.8</div>
-        <div className="flex items-center gap-3">
-          <button 
-            onClick={() => setLang(lang === 'KO' ? 'EN' : 'KO')} 
-            className="hover:opacity-100 transition flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-500/10"
-          >
-            {t.langToggle}
-          </button>
-
-          <button 
-            onClick={() => setIsDark(!isDark)} 
-            className="hover:opacity-100 transition flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-zinc-500/10"
-          >
-            {isDark ? t.lightMode : t.darkMode}
-          </button>
-        </div>
-      </footer>
     </div>
   );
 }
