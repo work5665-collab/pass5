@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase 초기화 (실제 환경에서는 .env.local에 환경변수로 숨겨야 해)
+// Supabase 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
 const supabase = createClient(supabaseUrl, supabaseKey);
@@ -461,22 +461,33 @@ const dict: Record<LangMode, DictType> = {
 
 export default function Pass5MasterApp() {
   const [user, setUser] = useState<any>(null);
-  
+  const [isAuthLoading, setIsAuthLoading] = useState(true);
+  const [isMounted, setIsMounted] = useState(false);
+
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
       setUser(session?.user ?? null);
+      setIsAuthLoading(false);
     });
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
       setUser(session?.user ?? null);
+      setIsAuthLoading(false);
     });
 
     return () => subscription.unsubscribe();
   }, []);
 
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
   const loadProjects = async (userId: string) => {
     setIsProjectsLoading(true);
 
+    console.log('Loading projects for user:', userId);
+
+    // 프로젝트만 먼저 가져오기
     const { data, error } = await supabase
       .from('projects')
       .select('id, name, created_by, created_at')
@@ -492,13 +503,36 @@ export default function Pass5MasterApp() {
     }
 
     const loadedProjects = (data || []) as Project[];
-    setProjects(loadedProjects);
+    console.log('Loaded projects:', loadedProjects);
+    
+    // 각 프로젝트에 대한 사용자 권한 확인 (이제 RLS 정책으로 자신의 멤버십 확인 가능)
+    const projectsWithRoles = await Promise.all(
+      loadedProjects.map(async (project) => {
+        console.log('Checking role for project:', project.id, 'user:', userId);
+        const { data: memberData, error: memberError } = await supabase
+          .from('project_members')
+          .select('role')
+          .eq('project_id', project.id)
+          .eq('user_id', userId)
+          .maybeSingle(); // single 대신 maybeSingle 사용
+        
+        console.log('Member data for project', project.id, ':', memberData, 'error:', memberError);
+        
+        return {
+          ...project,
+          userRole: memberData?.role || null
+        };
+      })
+    );
 
-    if (loadedProjects.length > 0) {
+    console.log('Projects with roles:', projectsWithRoles);
+    setProjects(projectsWithRoles);
+
+    if (projectsWithRoles.length > 0) {
       setActiveProjectId(prev =>
-        prev && loadedProjects.some(project => project.id === prev)
+        prev && projectsWithRoles.some(project => project.id === prev)
           ? prev
-          : loadedProjects[0].id
+          : projectsWithRoles[0].id
       );
     } else {
       setActiveProjectId(null);
@@ -507,16 +541,39 @@ export default function Pass5MasterApp() {
     setIsProjectsLoading(false);
   };
 
-  useEffect(() => {
-    if (!user) {
-      setProjects([]);
-      setActiveProjectId(null);
-      setIsProjectsLoading(false);
-      return;
-    }
+  const loadProjectMembers = async (projectId: string) => {
+    try {
+      // 현재 세션 토큰 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
 
-    loadProjects(user.id);
-  }, [user]);
+      console.log('Loading project members for:', projectId);
+      console.log('Current user ID:', user?.id);
+
+      const response = await fetch(`/api/members?projectId=${projectId}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        }
+      });
+      const data = await response.json();
+
+      console.log('Members response:', data);
+
+      if (response.ok) {
+        setProjectMembers(data.members || []);
+        
+        // 현재 사용자의 권한 설정
+        const currentUser = data.members?.find((m: any) => m.user_id === user?.id);
+        console.log('Current user from members:', currentUser);
+        console.log('Current user role:', currentUser?.role);
+        setCurrentUserRole(currentUser?.role || null);
+      } else {
+        console.error('Members API error:', data);
+      }
+    } catch (error) {
+      console.error('멤버 정보 불러오기 실패:', error);
+    }
+  };
 
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
@@ -536,17 +593,21 @@ export default function Pass5MasterApp() {
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
 
+
   type Project = {
     id: string;
     name: string;
     created_by: string;
     created_at: string;
+    userRole?: string; // 현재 사용자의 권한
   };
 
   const [isFolderOpen, setIsFolderOpen] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
   const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
   const [isProjectsLoading, setIsProjectsLoading] = useState(true);
+  const [projectMembers, setProjectMembers] = useState<any[]>([]); // 프로젝트 멤버 정보
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null); // 현재 사용자 권한
   
   const [isAddingProject, setIsAddingProject] = useState(false);
   const [newProjName, setNewProjName] = useState('');
@@ -557,7 +618,29 @@ export default function Pass5MasterApp() {
   const [headerEditingProjId, setHeaderEditingProjId] = useState<string | null>(null);
   const [headerTempName, setHeaderTempName] = useState('');
 
+  // 초대 모달 상태
+  const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState('member'); // admin, member, viewer
+
   const [frameworkData, setFrameworkData] = useState(initialFrameworkData);
+
+  // 모든 상태 정의 후 useEffect 훅 배치
+  useEffect(() => {
+    if (!user) {
+      setProjects([]);
+      setActiveProjectId(null);
+      setIsProjectsLoading(false);
+      return;
+    }
+    loadProjects(user.id);
+  }, [user]);
+
+  useEffect(() => {
+    if (activeProjectId && user) {
+      loadProjectMembers(activeProjectId);
+    }
+  }, [activeProjectId, user]);
 
   const [editingCardId, setEditingCardId] = useState<string | null>(null);
   const [tempCardTitle, setTempCardTitle] = useState('');
@@ -623,11 +706,17 @@ export default function Pass5MasterApp() {
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
   const [savePermanently, setSavePermanently] = useState<Record<string, boolean>>({});
 
-  const activeProject = projects.find(p => p.id === activeProjectId) || projects[0];
+  const activeProject = projects.find(p => p.id === activeProjectId);
+  const projectKey = activeProjectId ?? '';
+
+  // 권한 확인 헬퍼 함수
+  const canEdit = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'member';
+  const canInvite = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
 
   const getFieldOptions = (field: any, cardId: string) => {
     const added = customOptions[field.id] || [];
-    const projStore = formData[activeProjectId] || {};
+    const projStore = formData[projectKey] || {};
     const cardStore = projStore[cardId] || {};
     const currentVal = cardStore[field.id];
 
@@ -640,7 +729,7 @@ export default function Pass5MasterApp() {
 
   const handleSelectChange = (fieldId: string, val: string, cardId: string) => {
     if (val === 'CUSTOM_MODE') {
-      const projStore = formData[activeProjectId] || {};
+      const projStore = formData[projectKey] || {};
       const cardStore = projStore[cardId] || {};
       const currentVal = cardStore[fieldId] || '';
       
@@ -679,14 +768,14 @@ export default function Pass5MasterApp() {
   };
 
   const handleResetFieldValue = (cardId: string, fieldId: string) => {
-    const projStore = formData[activeProjectId] || {};
+    const projStore = formData[projectKey] || {};
     const cardStore = projStore[cardId] || {};
     const newCardStore = { ...cardStore };
     delete newCardStore[fieldId];
 
     setFormData(prev => ({
       ...prev,
-      [activeProjectId]: {
+      [projectKey]: {
         ...projStore,
         [cardId]: newCardStore
       }
@@ -695,11 +784,11 @@ export default function Pass5MasterApp() {
   };
 
   const updateFormValue = (cardId: string, fieldId: string, value: string) => {
-    const projStore = formData[activeProjectId] || {};
+    const projStore = formData[projectKey] || {};
     const cardStore = projStore[cardId] || {};
     setFormData(prev => ({
       ...prev,
-      [activeProjectId]: {
+      [projectKey]: {
         ...projStore,
         [cardId]: {
           ...cardStore,
@@ -711,7 +800,7 @@ export default function Pass5MasterApp() {
 
   const getCardProgress = (card: any) => {
     if (!card || !card.fields) return 0;
-    const projStore = formData[activeProjectId] || {};
+    const projStore = formData[projectKey] || {};
     const cardStore = projStore[card.id] || {};
     const totalFields = card.fields.length;
     if (totalFields === 0) return 0;
@@ -730,35 +819,52 @@ export default function Pass5MasterApp() {
     const projectName = newProjName.trim();
     if (!projectName) return;
 
-    if (!user) {
-      alert('로그인이 필요합니다.');
+    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
+
+    if (userError || !currentUser) {
+      alert(`로그인 정보를 확인하지 못했습니다.\n${userError?.message || '로그인이 필요합니다.'}`);
       return;
     }
 
-    const { data, error } = await supabase
+    const { error: insertError } = await supabase
       .from('projects')
       .insert({
         name: projectName,
-        created_by: user.id,
-      })
-      .select('id, name, created_by, created_at')
-      .single();
+        created_by: currentUser.id,
+      });
 
-    if (error) {
-      console.error('프로젝트 생성 실패:', error);
-      alert(`프로젝트를 만들지 못했습니다.\n${error.message}`);
+    if (insertError) {
+      alert(`프로젝트를 만들지 못했습니다.\n${insertError.message}`);
       return;
     }
 
-    const newProject = data as Project;
-    setProjects(prev => [...prev, newProject]);
-    setActiveProjectId(newProject.id);
     setNewProjName('');
     setIsAddingProject(false);
+    await loadProjects(currentUser.id);
+  };
+
+  const handleEditProject = async (projId: string, newName: string) => {
+    if (!canEdit) {
+      alert('편집 권한이 없습니다.');
+      return;
+    }
+
+    const { error } = await supabase
+      .from('projects')
+      .update({ name: newName })
+      .eq('id', projId);
+
+    if (error) {
+      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
+      return;
+    }
+
+    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: newName } : p));
   };
 
   const handleDuplicateProject = async (proj: Project) => {
-    if (!user) return;
+    const { data: { user: currentUser } } = await supabase.auth.getUser();
+    if (!currentUser) return;
 
     const newName = `${proj.name} (복제됨)`;
 
@@ -766,13 +872,12 @@ export default function Pass5MasterApp() {
       .from('projects')
       .insert({
         name: newName,
-        created_by: user.id,
+        created_by: currentUser.id,
       })
       .select('id, name, created_by, created_at')
       .single();
 
     if (error) {
-      console.error('프로젝트 복제 실패:', error);
       alert(`프로젝트를 복제하지 못했습니다.\n${error.message}`);
       return;
     }
@@ -801,7 +906,6 @@ export default function Pass5MasterApp() {
       .eq('id', projId);
 
     if (error) {
-      console.error('프로젝트 삭제 실패:', error);
       alert(`프로젝트를 삭제하지 못했습니다.\n${error.message}`);
       return;
     }
@@ -816,8 +920,15 @@ export default function Pass5MasterApp() {
 
   const handleCommitSidebarProjectName = async (projId: string) => {
     const projectName = sidebarTempName.trim();
-
     if (!projectName) {
+      setSidebarEditingProjId(null);
+      return;
+    }
+
+    // 권한 체크
+    const project = projects.find(p => p.id === projId);
+    if (!canEdit || (project?.userRole !== 'owner' && project?.userRole !== 'admin')) {
+      alert('프로젝트 이름을 수정할 권한이 없습니다.');
       setSidebarEditingProjId(null);
       return;
     }
@@ -828,7 +939,6 @@ export default function Pass5MasterApp() {
       .eq('id', projId);
 
     if (error) {
-      console.error('프로젝트 이름 수정 실패:', error);
       alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
       setSidebarEditingProjId(null);
       return;
@@ -840,8 +950,15 @@ export default function Pass5MasterApp() {
 
   const handleCommitHeaderProjectName = async (projId: string) => {
     const projectName = headerTempName.trim();
-
     if (!projectName) {
+      setHeaderEditingProjId(null);
+      return;
+    }
+
+    // 권한 체크
+    const project = projects.find(p => p.id === projId);
+    if (!canEdit || (project?.userRole !== 'owner' && project?.userRole !== 'admin')) {
+      alert('프로젝트 이름을 수정할 권한이 없습니다.');
       setHeaderEditingProjId(null);
       return;
     }
@@ -852,7 +969,6 @@ export default function Pass5MasterApp() {
       .eq('id', projId);
 
     if (error) {
-      console.error('프로젝트 이름 수정 실패:', error);
       alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
       setHeaderEditingProjId(null);
       return;
@@ -861,6 +977,7 @@ export default function Pass5MasterApp() {
     setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: projectName } : p));
     setHeaderEditingProjId(null);
   };
+
 
   const handleCommitStepMeta = (stepKey: string) => {
     setFrameworkData(prev => prev.map(step => {
@@ -946,7 +1063,6 @@ export default function Pass5MasterApp() {
         return step;
       });
     });
-
     setDraggedCardId(null);
   };
 
@@ -1106,6 +1222,42 @@ export default function Pass5MasterApp() {
     setTempFieldLabel('');
   };
 
+  const handleApplyPickedOptions = () => {
+    if (selectedPickedOptions.length === 0) {
+      setIsPickerOpen(false);
+      return;
+    }
+
+    const joinedStr = selectedPickedOptions.join(', ');
+
+    if (pickerTargetType === 'newField') {
+      setNewFieldOptionsStr(prev => prev ? `${prev}, ${joinedStr}` : joinedStr);
+    } else if (pickerTargetType === 'newCardField' && pickerTargetFieldIndex !== null) {
+      const updated = [...newCardFields];
+      const current = updated[pickerTargetFieldIndex].optionsStr;
+      updated[pickerTargetFieldIndex].optionsStr = current ? `${current}, ${joinedStr}` : joinedStr;
+      setNewCardFields(updated);
+    } else if (pickerTargetType === 'existingField' && pickerTargetFieldId) {
+      setCustomOptions(prev => {
+        const existing = prev[pickerTargetFieldId] || [];
+        const merged = Array.from(newSet([...existing, ...selectedPickedOptions]));
+        return { ...prev, [pickerTargetFieldId]: merged };
+      });
+    }
+
+    setSelectedPickedOptions([]);
+    setIsPickerOpen(false);
+    setPickerSearchQuery('');
+  };
+
+  const helperToggleOption = (opt: string) => {
+    setSelectedPickedOptions(prev => 
+      prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
+    );
+  };
+
+  const newSet = (arr: string[]) => Array.from(new Set(arr));
+
   const allFlattenedCards: { card: any; stepKey: string; stepTitle: string }[] = [];
   frameworkData.forEach(step => {
     step.cards.forEach(card => {
@@ -1130,6 +1282,66 @@ export default function Pass5MasterApp() {
     });
   });
 
+  // 초대 로직 (API 연동)
+  const handleSendInvite = async () => {
+    if (!inviteEmail || !activeProjectId) return;
+
+    try {
+      // 현재 세션 토큰 가져오기
+      const { data: { session } } = await supabase.auth.getSession();
+      const token = session?.access_token;
+
+      const response = await fetch('/api/invite', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          projectId: activeProjectId,
+          email: inviteEmail,
+          role: inviteRole
+        })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(`초대 실패: ${data.error}`);
+        return;
+      }
+
+      // 초대 링크 복사 옵션 제공
+      if (data.inviteLink) {
+        const copyLink = confirm(
+          `초대가 생성되었습니다!\n\n초대 링크를 복사하시겠습니까?\n\n링크: ${data.inviteLink}`
+        );
+        
+        if (copyLink) {
+          navigator.clipboard.writeText(data.inviteLink);
+          alert('초대 링크가 클립보드에 복사되었습니다!');
+        }
+      }
+
+      setInviteEmail('');
+      setInviteRole('member');
+      setIsInviteModalOpen(false);
+      
+    } catch (error) {
+      console.error('초대 오류:', error);
+      alert('초대 중 오류가 발생했습니다.');
+    }
+  };
+
+  if (!isMounted || isAuthLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-zinc-950 text-zinc-400 text-sm">
+        PASS 5 불러오는 중...
+      </div>
+    );
+  }
+
+  // 1. 완벽하게 구글 로그인 화면만 뜨도록 수정
   if (!user) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
@@ -1145,6 +1357,7 @@ export default function Pass5MasterApp() {
     );
   }
 
+  // 로그인 후 데이터 불러오는 중
   if (isProjectsLoading) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
@@ -1153,13 +1366,14 @@ export default function Pass5MasterApp() {
     );
   }
 
+  // 등록된 프로젝트가 없을 때
   if (!activeProject) {
     return (
       <div className={`min-h-screen flex items-center justify-center ${isDark ? 'bg-[#18181b] text-white' : 'bg-[#fafaf9] text-zinc-900'}`}>
         <div className={`w-full max-w-lg p-8 rounded-2xl border ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
           <div className="text-xs font-bold text-blue-500 tracking-widest mb-2">PASS 5 WORKSPACE</div>
           <h1 className="text-2xl font-black mb-2">첫 프로젝트를 만들어보세요</h1>
-          <p className="text-xs opacity-60 mb-6">프로젝트를 생성하면 이 계정이 자동으로 관리자(admin)가 됩니다.</p>
+          <p className="text-xs opacity-60 mb-6">프로젝트를 생성하면 이 계정이 자동으로 최고관리자(Owner)가 됩니다.</p>
           <form onSubmit={handleAddProject} className="flex gap-2">
             <input
               autoFocus
@@ -1200,13 +1414,25 @@ export default function Pass5MasterApp() {
                     <span className="text-[10px] opacity-60">{isFolderOpen ? '▼' : '▶'}</span>
                     <span className="text-[10px] font-medium opacity-40 uppercase tracking-wider">{t.projects} (폴더 관리)</span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsAddingProject(!isAddingProject)}
-                    className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold hover:bg-blue-500/30 transition"
-                  >
-                    {t.addProjectBtn}
-                  </button>
+                  <div className="flex gap-1">
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingProject(!isAddingProject)}
+                      className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold hover:bg-blue-500/30 transition"
+                    >
+                      {t.addProjectBtn}
+                    </button>
+                    {activeProject && (currentUserRole === 'owner' || currentUserRole === 'admin') && (
+                      <button
+                        type="button"
+                        onClick={() => setIsInviteModalOpen(true)}
+                        className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold hover:bg-emerald-500/30 transition"
+                        title="팀원 초대"
+                      >
+                        👥 초대
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {isAddingProject && (
@@ -1353,6 +1579,7 @@ export default function Pass5MasterApp() {
           </div>
         </aside>
 
+
         {/* 메인 콘텐츠 영역 */}
         <main className={`flex-1 flex flex-col p-8 overflow-y-auto ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
           
@@ -1401,22 +1628,25 @@ export default function Pass5MasterApp() {
                   >
                     {t.editName}
                   </button>
+                  {/* 멤버 초대 버튼 추가 */}
+                  <button
+                    onClick={() => setIsInviteModalOpen(true)}
+                    className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
+                  >
+                    + 팀원 초대
+                  </button>
                 </div>
               )}
             </div>
 
             <div className="flex items-center gap-3 text-xs">
-              {user ? (
+              {user && (
                 <div className="flex items-center gap-2 mr-4">
                   <span className="opacity-70 text-[11px]">{user.email}</span>
                   <button onClick={handleLogout} className={`px-2 py-1 rounded transition ${isDark ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white' : 'bg-rose-100 text-rose-600 hover:bg-rose-500 hover:text-white'}`}>
                     로그아웃
                   </button>
                 </div>
-              ) : (
-                <button onClick={handleGoogleLogin} className={`mr-4 px-3 py-1.5 rounded font-bold transition flex items-center gap-1.5 ${isDark ? 'bg-white text-zinc-900 hover:bg-zinc-200' : 'bg-zinc-800 text-white hover:bg-zinc-700'}`}>
-                  <span className="text-blue-500">G</span> 구글 로그인
-                </button>
               )}
 
               <button 
@@ -1699,10 +1929,11 @@ export default function Pass5MasterApp() {
             </div>
           )}
 
+
           {/* 2. 단계별 집중 뷰 */}
           {viewMode === 'focus' && (() => {
             const currentStep = frameworkData.find(s => s.stepKey === focusStepKey) || frameworkData[0];
-            const projStore = formData[activeProjectId] || {};
+            const projStore = formData[projectKey] || {};
 
             return (
               <div className="max-w-4xl mx-auto pb-12 w-full flex flex-col gap-6">
@@ -1796,7 +2027,7 @@ export default function Pass5MasterApp() {
           {viewMode === 'detail' && activeCardObj && (() => {
             const progress = getCardProgress(activeCardObj);
             const isCompleted = progress === 100;
-            const projStore = formData[activeProjectId] || {};
+            const projStore = formData[projectKey] || {};
             const cardStore = projStore[activeCardObj.id] || {};
 
             return (
@@ -2133,6 +2364,7 @@ export default function Pass5MasterApp() {
             );
           })()}
 
+
           {/* 4. 종합 프로젝트 정의서 뷰 */}
           {viewMode === 'report' && (
             <div className="max-w-4xl mx-auto pb-12 w-full">
@@ -2162,7 +2394,7 @@ export default function Pass5MasterApp() {
               <div className={`p-10 rounded-2xl border ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
                 <div className="text-center mb-10 pb-6 border-b border-zinc-500/20">
                   <span className="text-xs font-bold text-blue-500 tracking-widest uppercase">PASS 5 FRAMEWORK SYSTEM</span>
-                  <h1 className="text-2xl font-black mt-1 mb-2">{activeProject.name}</h1>
+                  <h1 className="text-2xl font-black mt-1 mb-2">{activeProject?.name}</h1>
                   <p className="text-xs opacity-50">종합 프로젝트 정의서 (Master Specification Document)</p>
                 </div>
 
@@ -2172,7 +2404,7 @@ export default function Pass5MasterApp() {
                       <h3 className="text-sm font-bold text-blue-400 mb-4">{col.title} 단계</h3>
                       <div className="grid grid-cols-1 gap-4">
                         {col.cards.map((card, cIdx) => {
-                          const projStore = formData[activeProjectId] || {};
+                          const projStore = formData[projectKey] || {};
                           const cardStore = projStore[card.id] || {};
                           return (
                             <div key={cIdx} className={`p-4 rounded-xl border ${isDark ? 'bg-zinc-800/30 border-zinc-700/40' : 'bg-zinc-200 border-zinc-200'}`}>
@@ -2212,6 +2444,55 @@ export default function Pass5MasterApp() {
 
         </main>
       </div>
+
+      {/* 초대하기 팝업 모달 */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
+          <div className={`w-full max-w-sm rounded-2xl p-6 border shadow-2xl flex flex-col gap-4 ${isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'}`}>
+            <div className="flex justify-between items-center pb-3 border-b border-zinc-500/20">
+              <h3 className="text-sm font-bold flex items-center gap-2">
+                <span>💌</span> 팀원 초대하기
+              </h3>
+              <button onClick={() => setIsInviteModalOpen(false)} className="text-xs opacity-60 hover:opacity-100">✕ 닫기</button>
+            </div>
+
+            <div className="flex flex-col gap-3">
+              <div>
+                <label className="text-[11px] font-bold opacity-60 mb-1 block">초대할 이메일</label>
+                <input
+                  type="email"
+                  placeholder="colleague@example.com"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  className={`w-full px-3 py-2 text-xs rounded-lg outline-none border transition ${isDark ? 'bg-zinc-800 border-zinc-700 text-white focus:border-blue-500' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-400'}`}
+                />
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold opacity-60 mb-1 block">부여할 역할 (권한)</label>
+                <select
+                  value={inviteRole}
+                  onChange={(e) => setInviteRole(e.target.value)}
+                  className={`w-full px-3 py-2 text-xs rounded-lg outline-none border transition ${isDark ? 'bg-zinc-800 border-zinc-700 text-white focus:border-blue-500' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-400'}`}
+                >
+                  <option value="admin">관리자 (초대/멤버관리/편집/보기 가능)</option>
+                  <option value="member">멤버 (내용 편집 및 보기 가능)</option>
+                  <option value="viewer">뷰어 (보기만 가능, 외부 클라이언트용)</option>
+                </select>
+              </div>
+            </div>
+
+            <div className="pt-3 border-t border-zinc-500/20 flex justify-end gap-2">
+              <button onClick={() => setIsInviteModalOpen(false)} className="px-4 py-2 text-xs rounded-lg bg-zinc-600 text-white hover:bg-zinc-500 transition">
+                취소
+              </button>
+              <button onClick={handleSendInvite} className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition">
+                초대 메일 보내기
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 5. 기존 옵션 가져오기(Picker) 모달 창 */}
       {isPickerOpen && (() => {
@@ -2309,97 +2590,59 @@ export default function Pass5MasterApp() {
                     frameworkData.forEach(step => {
                       step.cards.forEach(card => {
                         card.fields.forEach((field: any) => {
-                          const opts = getFieldOptions(field, card.id);
-                          const hasMatchingOpt = opts.some((o: string) => o.toLowerCase().includes(query));
-                          const hasMatchingLabel = field.label.toLowerCase().includes(query) || card.title.toLowerCase().includes(query);
-
-                          if (hasMatchingOpt || hasMatchingLabel) {
-                            itemsToRender.push({
-                              field,
-                              stepTitle: step.title,
-                              cardTitle: card.title,
-                              cardId: card.id
-                            });
+                          const baseOpts = field.options || [];
+                          const customOpts = customOptions[field.id] || [];
+                          const allOpts = [...baseOpts, ...customOpts];
+                          
+                          const matches = allOpts.some(o => o.toLowerCase().includes(query)) || field.label.toLowerCase().includes(query);
+                          if (matches) {
+                            itemsToRender.push({ field, stepTitle: step.title, cardTitle: card.title, cardId: card.id });
                           }
                         });
                       });
                     });
                   } else {
-                    const selectedStepObj = frameworkData.find(s => s.stepKey === pickerStepKey) || frameworkData[0];
-                    const cardsInStep = selectedStepObj.cards;
-                    const currentPickerCard = cardsInStep.find(c => c.id === pickerCardId) || cardsInStep[0];
-
-                    if (currentPickerCard && currentPickerCard.fields) {
-                      currentPickerCard.fields.forEach((field: any) => {
-                        itemsToRender.push({
-                          field,
-                          stepTitle: selectedStepObj.title,
-                          cardTitle: currentPickerCard.title,
-                          cardId: currentPickerCard.id
-                        });
+                    const step = frameworkData.find(s => s.stepKey === pickerStepKey);
+                    const card = step?.cards.find(c => c.id === pickerCardId);
+                    if (card) {
+                      card.fields.forEach((field: any) => {
+                        itemsToRender.push({ field, stepTitle: step!.title, cardTitle: card.title, cardId: card.id });
                       });
                     }
                   }
 
                   if (itemsToRender.length === 0) {
-                    return <div className="text-xs opacity-40 py-8 text-center">검색 결과가 없습니다. 다른 키워드로 검색해 보세요.</div>;
+                    return <div className="text-xs opacity-50 p-4 text-center">검색 결과가 없습니다.</div>;
                   }
 
-                  return itemsToRender.map(({ field, stepTitle, cardTitle, cardId }, idx) => {
-                    const allOpts = getFieldOptions(field, cardId);
-                    const displayOpts = allOpts;
-                    const isAllSelected = displayOpts.length > 0 && displayOpts.every((opt: string) => selectedPickedOptions.includes(opt));
+                  return itemsToRender.map((item, iIdx) => {
+                    const baseOpts = item.field.options || [];
+                    const customOpts = customOptions[item.field.id] || [];
+                    const allOpts = newSet([...baseOpts, ...customOpts]);
 
                     return (
-                      <div key={idx} className={`p-3 rounded-xl border flex flex-col gap-2 ${isDark ? 'bg-zinc-800/40 border-zinc-700/60' : 'bg-zinc-50 border-zinc-200'}`}>
-                        <div className="flex items-center gap-1.5 text-[10px] text-blue-400 font-semibold">
-                          <span className="px-1.5 py-0.5 rounded bg-blue-500/20">{stepTitle}</span>
-                          <span>&gt;</span>
-                          <span>{cardTitle}</span>
-                          <span>&gt;</span>
-                          <span className="opacity-80">{field.label}</span>
-                        </div>
-
-                        <div 
-                          onClick={() => {
-                            if (isAllSelected) {
-                              setSelectedPickedOptions(selectedPickedOptions.filter(o => !displayOpts.includes(o)));
-                            } else {
-                              const merged = Array.from(new Set([...selectedPickedOptions, ...displayOpts]));
-                              setSelectedPickedOptions(merged);
-                            }
-                          }}
-                          className="text-xs font-bold cursor-pointer hover:underline flex items-center justify-between"
-                        >
-                          <span className="opacity-90">📌 하위 옵션 목록</span>
-                          <span className="text-[10px] opacity-60 font-normal">({isAllSelected ? t.deselectAll : t.selectAll})</span>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5">
-                          {allOpts.map((opt: string, oIdx: number) => {
+                      <div key={iIdx} className={`p-3 rounded-lg border flex flex-col gap-2 ${isDark ? 'bg-zinc-800/40 border-zinc-700/50' : 'bg-zinc-50 border-zinc-200'}`}>
+                        {query && (
+                          <div className="text-[10px] opacity-50 flex items-center gap-1 mb-1">
+                            <span>{item.stepTitle}</span> <span>›</span> <span>{item.cardTitle}</span>
+                          </div>
+                        )}
+                        <div className="text-xs font-bold text-blue-400">{item.field.label}</div>
+                        <div className="flex flex-wrap gap-2 mt-1">
+                          {allOpts.map((opt, oIdx) => {
                             const isSelected = selectedPickedOptions.includes(opt);
-                            const isHighlight = query && opt.toLowerCase().includes(query);
-
+                            const isMatch = query && opt.toLowerCase().includes(query);
                             return (
                               <button
                                 key={oIdx}
-                                type="button"
-                                onClick={() => {
-                                  if (isSelected) {
-                                    setSelectedPickedOptions(selectedPickedOptions.filter(o => o !== opt));
-                                  } else {
-                                    setSelectedPickedOptions([...selectedPickedOptions, opt]);
-                                  }
-                                }}
-                                className={`px-2.5 py-1 text-[11px] rounded-lg transition border ${
+                                onClick={() => helperToggleOption(opt)}
+                                className={`px-2.5 py-1.5 text-[11px] rounded-md transition text-left leading-tight ${
                                   isSelected
-                                    ? 'bg-blue-600 border-blue-500 text-white font-bold shadow-xs'
-                                    : isHighlight
-                                    ? (isDark ? 'bg-blue-950/40 border-blue-500 text-blue-200' : 'bg-blue-50 border-blue-300 text-blue-900')
-                                    : (isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-300 hover:border-zinc-500' : 'bg-white border-zinc-300 text-zinc-700 hover:border-zinc-400')
-                                }`}
+                                    ? 'bg-blue-600 text-white font-medium shadow-sm'
+                                    : (isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-300' : 'bg-white hover:bg-zinc-200 text-zinc-700 border border-zinc-200')
+                                } ${isMatch && !isSelected ? 'border-blue-500/50 border' : ''}`}
                               >
-                                {isSelected ? '✓ ' : '+ '} {opt}
+                                {isSelected && '✓ '} {opt}
                               </button>
                             );
                           })}
@@ -2410,49 +2653,16 @@ export default function Pass5MasterApp() {
                 })()}
               </div>
 
-              <div className="flex justify-between items-center pt-3 border-t border-zinc-500/20">
-                <div className="text-xs font-semibold text-blue-400">
-                  선택된 옵션 총 {selectedPickedOptions.length}개
+              <div className="mt-2 pt-3 border-t border-zinc-500/20 flex justify-between items-center">
+                <div className="text-[11px] opacity-70">
+                  선택된 항목: <span className="font-bold text-blue-400">{selectedPickedOptions.length}개</span>
                 </div>
                 <div className="flex gap-2">
-                  <button
-                    onClick={() => {
-                      setSelectedPickedOptions([]);
-                      setPickerSearchQuery('');
-                      setIsPickerOpen(false);
-                    }}
-                    className="px-4 py-2 text-xs rounded-lg bg-zinc-600 text-white"
-                  >
+                  <button onClick={() => { setIsPickerOpen(false); setPickerSearchQuery(''); setSelectedPickedOptions([]); }} className="px-4 py-2 text-xs rounded-lg bg-zinc-600 text-white hover:bg-zinc-500 transition">
                     취소
                   </button>
-                  <button
-                    onClick={() => {
-                      const joinedStr = selectedPickedOptions.join(', ');
-                      if (pickerTargetType === 'newField') {
-                        setNewFieldOptionsStr(joinedStr);
-                      } else if (pickerTargetType === 'newCardField' && pickerTargetFieldIndex !== null) {
-                        const updated = [...newCardFields];
-                        updated[pickerTargetFieldIndex].optionsStr = joinedStr;
-                        setNewCardFields(updated);
-                      } else if (pickerTargetType === 'existingField' && pickerTargetFieldId) {
-                        const targetFieldId = pickerTargetFieldId;
-                        selectedPickedOptions.forEach(opt => {
-                          const currentAdded = customOptions[targetFieldId] || [];
-                          if (!currentAdded.includes(opt)) {
-                            setCustomOptions(prev => ({
-                              ...prev,
-                              [targetFieldId]: [...currentAdded, opt]
-                            }));
-                          }
-                        });
-                      }
-                      setSelectedPickedOptions([]);
-                      setPickerSearchQuery('');
-                      setIsPickerOpen(false);
-                    }}
-                    className="px-5 py-2 text-xs font-bold rounded-lg bg-blue-600 hover:bg-blue-500 text-white shadow-md transition"
-                  >
-                    선택한 옵션 적용하기 ({selectedPickedOptions.length})
+                  <button onClick={handleApplyPickedOptions} className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition shadow-sm">
+                    선택 항목 가져오기
                   </button>
                 </div>
               </div>
@@ -2460,6 +2670,71 @@ export default function Pass5MasterApp() {
           </div>
         );
       })()}
+
+      {/* 초대 모달 */}
+      {isInviteModalOpen && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className={`w-full max-w-md rounded-2xl border shadow-2xl ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
+            <div className="p-6">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-bold">팀원 초대</h3>
+                <button
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className={`text-sm ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-900'}`}
+                >
+                  ✕
+                </button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-2">이메일 주소</label>
+                  <input
+                    type="email"
+                    value={inviteEmail}
+                    onChange={(e) => setInviteEmail(e.target.value)}
+                    placeholder="example@email.com"
+                    className={`w-full px-4 py-2.5 text-sm rounded-lg border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-2">권한 선택</label>
+                  <select
+                    value={inviteRole}
+                    onChange={(e) => setInviteRole(e.target.value)}
+                    className={`w-full px-4 py-2.5 text-sm rounded-lg border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+                  >
+                    <option value="admin">관리자 (Admin) - 다른 사람 초대, 멤버 관리, 편집 및 보기 가능</option>
+                    <option value="member">멤버 (Member) - 내용 편집 및 보기 가능</option>
+                    <option value="viewer">뷰어 (Viewer) - 보기만 가능</option>
+                  </select>
+                </div>
+
+                <div className={`p-3 rounded-lg text-xs ${isDark ? 'bg-zinc-800/50 text-zinc-400' : 'bg-zinc-100 text-zinc-600'}`}>
+                  <p>💡 초대를 보내면 상대방이 이메일로 초대 링크를 받게 됩니다. 또는 초대 링크를 복사해서 카카오톡이나 메신저로 공유할 수도 있습니다.</p>
+                </div>
+              </div>
+
+              <div className="flex gap-3 mt-6">
+                <button
+                  onClick={() => setIsInviteModalOpen(false)}
+                  className={`flex-1 px-4 py-2.5 text-sm rounded-lg font-medium transition ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300'}`}
+                >
+                  취소
+                </button>
+                <button
+                  onClick={handleSendInvite}
+                  disabled={!inviteEmail}
+                  className={`flex-1 px-4 py-2.5 text-sm rounded-lg font-medium transition bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
+                >
+                  초대 보내기
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
