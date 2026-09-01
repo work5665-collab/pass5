@@ -569,7 +569,7 @@ export default function Pass5MasterApp() {
       const dbCards = await fetchCardsByProject(projectId);
       
       // Convert DB cards to frameworkData format
-      // Merge with initialFrameworkData to keep default cards
+      // Keep default cards and append user-created cards
       const frameworkDataFromDB: typeof initialFrameworkData = initialFrameworkData.map(step => {
         const stepDbCards = dbCards
           .filter(card => card.step_key === step.stepKey)
@@ -580,15 +580,19 @@ export default function Pass5MasterApp() {
             fields: dbCard.fields
           }));
 
-        // If there are DB cards for this step, use them; otherwise use default cards
-        if (stepDbCards.length > 0) {
-          return {
-            ...step,
-            cards: stepDbCards
-          };
-        } else {
-          return step; // Keep default cards
-        }
+        // Get default card IDs for this step
+        const defaultCardIds = step.cards.map(c => c.id);
+        
+        // Filter out DB cards that are default cards (they will be kept from initialFrameworkData)
+        const userCreatedCards = stepDbCards.filter(dbCard => 
+          !defaultCardIds.includes(dbCard.id)
+        );
+
+        // Keep default cards and append user-created cards
+        return {
+          ...step,
+          cards: [...step.cards, ...userCreatedCards]
+        };
       });
 
       // Update frameworkData with DB data
