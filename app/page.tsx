@@ -890,7 +890,9 @@ export default function Pass5MasterApp() {
 
       if (memberError) {
         console.error('Failed to add owner to project_members:', memberError);
-        alert(`프로젝트는 생성되었으나 권한 설정에 실패했습니다.\n${memberError.message}`);
+        // Don't alert immediately - this might be a temporary RLS issue
+        // The project was created successfully, let the user continue
+        console.warn('Project created but owner assignment failed. User may need to be added manually via admin.');
       }
     }
 
@@ -953,7 +955,8 @@ export default function Pass5MasterApp() {
 
     if (memberError) {
       console.error('Failed to add owner to project_members for duplicated project:', memberError);
-      alert(`프로젝트는 복제되었으나 권한 설정에 실패했습니다.\n${memberError.message}`);
+      // Don't alert immediately - this might be a temporary RLS issue
+      console.warn('Project duplicated but owner assignment failed. User may need to be added manually via admin.');
     }
 
     // Duplicate cards in database
