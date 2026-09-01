@@ -33,6 +33,15 @@ export async function POST(request: NextRequest) {
       .eq('user_id', user.id)
       .maybeSingle(); // maybeSingle 사용
 
+    // 프로젝트 이름 가져오기
+    const { data: projectData } = await supabase
+      .from('projects')
+      .select('name')
+      .eq('id', projectId)
+      .single();
+    
+    const projectName = projectData?.name || '프로젝트';
+
     console.log('Member check result:', memberCheck, 'Error:', memberError);
 
     if (memberError) {
@@ -93,11 +102,40 @@ export async function POST(request: NextRequest) {
     // 초대 링크 생성
     const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/invite/${invite.token}`;
 
+    // 이메일 발송 시도
+    try {
+      const emailResponse = await fetch(`${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/send-invite-email`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          email: email,
+          token: invite.token,
+          projectName: projectName,
+          inviterName: user.email || '관리자',
+          role: role
+        })
+      });
+
+      const emailData = await emailResponse.json();
+      console.log('Email send result:', emailData);
+      
+      if (!emailResponse.ok) {
+        console.error('Email send failed:', emailData);
+        // 이메일 발송 실패해도 초대 링크는 반환
+      }
+    } catch (emailError) {
+      console.error('Email send error:', emailError);
+      // 이메일 발송 실패해도 초대 링크는 반환
+    }
+
     return NextResponse.json({ 
       success: true,
       inviteId: invite.id,
       token: invite.token,
-      inviteLink: inviteLink
+      inviteLink: inviteLink,
+      emailSent: true // 이메일 발송 시도 완료
     });
 
   } catch (error) {

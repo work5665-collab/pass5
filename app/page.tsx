@@ -2,6 +2,19 @@
 
 import React, { useState, useEffect } from 'react';
 import { createClient } from '@supabase/supabase-js';
+import InviteModal from './components/InviteModal';
+import ProjectSidebar from './components/ProjectSidebar';
+import KanbanBoard from '../components/KanbanBoard';
+import { ViewMode, LangMode, DictType, Project } from '../lib/types';
+import { 
+  fetchCardsByProject, 
+  createCard, 
+  updateCard, 
+  deleteCard, 
+  updateCardStep,
+  duplicateCardsForProject,
+  deleteAllCardsByProject
+} from '../lib/supabase/cards';
 
 // Supabase 초기화
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
@@ -359,41 +372,6 @@ const initialFrameworkData = [
   }
 ];
 
-type ViewMode = 'kanban' | 'focus' | 'detail' | 'report';
-type LangMode = 'KO' | 'EN';
-
-interface DictType {
-  workspace: string;
-  projects: string;
-  focusViews: string;
-  addProjectBtn: string;
-  projPlaceholder: string;
-  kanbanView: string;
-  reportView: string;
-  kanbanGuide: string;
-  completed100: string;
-  inProgress: string;
-  focusGo: string;
-  editName: string;
-  addCard: string;
-  back: string;
-  focusModeTitle: string;
-  detailEdit: string;
-  progress: string;
-  formStatus: string;
-  notEntered: string;
-  prevCard: string;
-  nextCard: string;
-  firstCard: string;
-  lastCard: string;
-  selectAll: string;
-  deselectAll: string;
-  printPdf: string;
-  lightMode: string;
-  darkMode: string;
-  langToggle: string;
-}
-
 const dict: Record<LangMode, DictType> = {
   KO: {
     workspace: 'PASS 5 WORKSPACE',
@@ -528,6 +506,17 @@ export default function Pass5MasterApp() {
     console.log('Projects with roles:', projectsWithRoles);
     setProjects(projectsWithRoles);
 
+    // Initialize frameworkData for any new projects
+    setFrameworkDataPerProject(prev => {
+      const updated = { ...prev };
+      projectsWithRoles.forEach(project => {
+        if (!updated[project.id]) {
+          updated[project.id] = JSON.parse(JSON.stringify(initialFrameworkData));
+        }
+      });
+      return updated;
+    });
+
     if (projectsWithRoles.length > 0) {
       setActiveProjectId(prev =>
         prev && projectsWithRoles.some(project => project.id === prev)
@@ -575,6 +564,48 @@ export default function Pass5MasterApp() {
     }
   };
 
+  const loadCardsForProject = async (projectId: string) => {
+    try {
+      const dbCards = await fetchCardsByProject(projectId);
+      
+      // Convert DB cards to frameworkData format
+      // Merge with initialFrameworkData to keep default cards
+      const frameworkDataFromDB: typeof initialFrameworkData = initialFrameworkData.map(step => {
+        const stepDbCards = dbCards
+          .filter(card => card.step_key === step.stepKey)
+          .map(dbCard => ({
+            id: dbCard.card_id,
+            title: dbCard.title,
+            desc: dbCard.description,
+            fields: dbCard.fields
+          }));
+
+        // If there are DB cards for this step, use them; otherwise use default cards
+        if (stepDbCards.length > 0) {
+          return {
+            ...step,
+            cards: stepDbCards
+          };
+        } else {
+          return step; // Keep default cards
+        }
+      });
+
+      // Update frameworkData with DB data
+      setFrameworkData(frameworkDataFromDB);
+      
+      // Store in frameworkDataPerProject for local state management
+      setFrameworkDataPerProject(prev => ({
+        ...prev,
+        [projectId]: frameworkDataFromDB
+      }));
+    } catch (error) {
+      console.error('Failed to load cards for project:', error);
+      // Fallback to initial framework data if DB load fails
+      setFrameworkData(initialFrameworkData);
+    }
+  };
+
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -593,14 +624,6 @@ export default function Pass5MasterApp() {
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
 
-
-  type Project = {
-    id: string;
-    name: string;
-    created_by: string;
-    created_at: string;
-    userRole?: string; // 현재 사용자의 권한
-  };
 
   const [isFolderOpen, setIsFolderOpen] = useState(true);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -623,6 +646,7 @@ export default function Pass5MasterApp() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member'); // admin, member, viewer
 
+  const [frameworkDataPerProject, setFrameworkDataPerProject] = useState<Record<string, typeof initialFrameworkData>>({});
   const [frameworkData, setFrameworkData] = useState(initialFrameworkData);
 
   // 모든 상태 정의 후 useEffect 훅 배치
@@ -639,6 +663,9 @@ export default function Pass5MasterApp() {
   useEffect(() => {
     if (activeProjectId && user) {
       loadProjectMembers(activeProjectId);
+      
+      // Load cards from DB for the active project
+      loadCardsForProject(activeProjectId);
     }
   }, [activeProjectId, user]);
 
@@ -708,6 +735,17 @@ export default function Pass5MasterApp() {
 
   const activeProject = projects.find(p => p.id === activeProjectId);
   const projectKey = activeProjectId ?? '';
+
+  // Helper function to update frameworkData for the current project
+  const updateFrameworkData = (updater: (prev: typeof initialFrameworkData) => typeof initialFrameworkData) => {
+    setFrameworkData(updater);
+    if (activeProjectId) {
+      setFrameworkDataPerProject(prev => ({
+        ...prev,
+        [activeProjectId]: updater(prev[activeProjectId] || initialFrameworkData)
+      }));
+    }
+  };
 
   // 권한 확인 헬퍼 함수
   const canEdit = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'member';
@@ -826,16 +864,34 @@ export default function Pass5MasterApp() {
       return;
     }
 
-    const { error: insertError } = await supabase
+    const { data: projectData, error: insertError } = await supabase
       .from('projects')
       .insert({
         name: projectName,
         created_by: currentUser.id,
-      });
+      })
+      .select('id')
+      .single();
 
     if (insertError) {
       alert(`프로젝트를 만들지 못했습니다.\n${insertError.message}`);
       return;
+    }
+
+    // Add creator as owner to project_members
+    if (projectData?.id) {
+      const { error: memberError } = await supabase
+        .from('project_members')
+        .insert({
+          project_id: projectData.id,
+          user_id: currentUser.id,
+          role: 'owner'
+        });
+
+      if (memberError) {
+        console.error('Failed to add owner to project_members:', memberError);
+        alert(`프로젝트는 생성되었으나 권한 설정에 실패했습니다.\n${memberError.message}`);
+      }
     }
 
     setNewProjName('');
@@ -884,10 +940,36 @@ export default function Pass5MasterApp() {
 
     const newProject = data as Project;
     const targetFormData = formData[proj.id] || {};
+    const targetFrameworkData = frameworkDataPerProject[proj.id] || initialFrameworkData;
+
+    // Add creator as owner to project_members for the duplicated project
+    const { error: memberError } = await supabase
+      .from('project_members')
+      .insert({
+        project_id: newProject.id,
+        user_id: currentUser.id,
+        role: 'owner'
+      });
+
+    if (memberError) {
+      console.error('Failed to add owner to project_members for duplicated project:', memberError);
+      alert(`프로젝트는 복제되었으나 권한 설정에 실패했습니다.\n${memberError.message}`);
+    }
+
+    // Duplicate cards in database
+    const duplicateSuccess = await duplicateCardsForProject(proj.id, newProject.id);
+    if (!duplicateSuccess) {
+      alert(`카드 복제에 실패했습니다. 프로젝트는 생성되었으나 카드 데이터가 없을 수 있습니다.`);
+    }
 
     setFormData(prev => ({
       ...prev,
       [newProject.id]: JSON.parse(JSON.stringify(targetFormData))
+    }));
+
+    setFrameworkDataPerProject(prev => ({
+      ...prev,
+      [newProject.id]: JSON.parse(JSON.stringify(targetFrameworkData))
     }));
 
     setProjects(prev => [...prev, newProject]);
@@ -899,6 +981,9 @@ export default function Pass5MasterApp() {
       alert('마지막 프로젝트는 삭제할 수 없습니다.');
       return;
     }
+
+    // Delete all cards for this project from database
+    await deleteAllCardsByProject(projId);
 
     const { error } = await supabase
       .from('projects')
@@ -912,6 +997,19 @@ export default function Pass5MasterApp() {
 
     const filtered = projects.filter(p => p.id !== projId);
     setProjects(filtered);
+
+    // Clean up formData and frameworkDataPerProject for deleted project
+    setFormData(prev => {
+      const updated = { ...prev };
+      delete updated[projId];
+      return updated;
+    });
+
+    setFrameworkDataPerProject(prev => {
+      const updated = { ...prev };
+      delete updated[projId];
+      return updated;
+    });
 
     if (activeProjectId === projId) {
       setActiveProjectId(filtered[0]?.id ?? null);
@@ -980,7 +1078,7 @@ export default function Pass5MasterApp() {
 
 
   const handleCommitStepMeta = (stepKey: string) => {
-    setFrameworkData(prev => prev.map(step => {
+    updateFrameworkData(prev => prev.map(step => {
       if (step.stepKey === stepKey) {
         return {
           ...step,
@@ -1024,18 +1122,33 @@ export default function Pass5MasterApp() {
     e.preventDefault();
   };
 
-  const handleDrop = (e: React.DragEvent, targetStepKey: string, targetCardId?: string) => {
+  const handleDrop = async (e: React.DragEvent, targetStepKey: string, targetCardId?: string) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!draggedCardId) return;
+    if (!draggedCardId || !activeProjectId) return;
 
-    setFrameworkData(prevFramework => {
-      let movedCard: any = null;
+    // Find the card being moved
+    let movedCard: any = null;
+    let sourceStepKey: string | null = null;
+
+    frameworkData.forEach(step => {
+      const foundCard = step.cards.find(c => c.id === draggedCardId);
+      if (foundCard) {
+        movedCard = foundCard;
+        sourceStepKey = step.stepKey;
+      }
+    });
+
+    if (!movedCard) return;
+
+    // Update local state first
+    updateFrameworkData(prevFramework => {
+      let movedCardLocal: any = null;
 
       const cleanedFramework = prevFramework.map(step => {
         const filteredCards = step.cards.filter(c => {
           if (c.id === draggedCardId) {
-            movedCard = c;
+            movedCardLocal = c;
             return false;
           }
           return true;
@@ -1043,7 +1156,7 @@ export default function Pass5MasterApp() {
         return { ...step, cards: filteredCards };
       });
 
-      if (!movedCard) return prevFramework;
+      if (!movedCardLocal) return prevFramework;
 
       return cleanedFramework.map(step => {
         if (step.stepKey === targetStepKey) {
@@ -1051,18 +1164,26 @@ export default function Pass5MasterApp() {
           if (targetCardId) {
             const targetIdx = newCards.findIndex(c => c.id === targetCardId);
             if (targetIdx !== -1) {
-              newCards.splice(targetIdx, 0, movedCard);
+              newCards.splice(targetIdx, 0, movedCardLocal);
             } else {
-              newCards.push(movedCard);
+              newCards.push(movedCardLocal);
             }
           } else {
-            newCards.push(movedCard);
+            newCards.push(movedCardLocal);
           }
           return { ...step, cards: newCards };
         }
         return step;
       });
     });
+
+    // Update database
+    if (sourceStepKey !== targetStepKey) {
+      // Card moved to different step - update step_key in DB
+      await updateCardStep(draggedCardId, activeProjectId, targetStepKey);
+    }
+    // If moved within same step, position update would be handled here (omitted for simplicity)
+
     setDraggedCardId(null);
   };
 
@@ -1076,7 +1197,7 @@ export default function Pass5MasterApp() {
     const sourceFieldId = e.dataTransfer.getData('text/field');
     if (!sourceFieldId || sourceFieldId === targetFieldId) return;
 
-    setFrameworkData(prev => prev.map(step => ({
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -1094,8 +1215,8 @@ export default function Pass5MasterApp() {
     })));
   };
 
-  const handleCreateCard = (stepKey: string) => {
-    if (!newCardTitle.trim()) return;
+  const handleCreateCard = async (stepKey: string) => {
+    if (!newCardTitle.trim() || !activeProjectId) return;
 
     const formattedFields = newCardFields.map((f, idx) => ({
       id: `field_${Date.now()}_${idx}`,
@@ -1103,8 +1224,9 @@ export default function Pass5MasterApp() {
       options: f.optionsStr.split(',').map(o => o.trim()).filter(Boolean)
     }));
 
+    const newCardId = `card_${Date.now()}`;
     const newCard = {
-      id: `card_${Date.now()}`,
+      id: newCardId,
       title: newCardTitle.trim(),
       desc: newCardDesc.trim() || '새로 추가된 커스텀 항목입니다.',
       fields: formattedFields.length > 0 ? formattedFields : [
@@ -1116,7 +1238,17 @@ export default function Pass5MasterApp() {
       ]
     };
 
-    setFrameworkData(prev => prev.map(step => {
+    // Save to database
+    await createCard(
+      activeProjectId,
+      newCardId,
+      newCard.title,
+      newCard.desc,
+      stepKey,
+      newCard.fields
+    );
+
+    updateFrameworkData(prev => prev.map(step => {
       if (step.stepKey === stepKey) {
         return { ...step, cards: [...step.cards, newCard] };
       }
@@ -1129,8 +1261,13 @@ export default function Pass5MasterApp() {
     setAddingCardStepKey(null);
   };
 
-  const handleDeleteCard = (cardId: string) => {
-    setFrameworkData(prev => prev.map(step => ({
+  const handleDeleteCard = async (cardId: string) => {
+    if (!activeProjectId) return;
+
+    // Delete from database with project_id filter
+    await deleteCard(cardId, activeProjectId);
+
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.filter(c => c.id !== cardId)
     })));
@@ -1145,8 +1282,26 @@ export default function Pass5MasterApp() {
     }
   };
 
-  const handleSaveCardMeta = (cardId: string) => {
-    setFrameworkData(prev => prev.map(step => ({
+  const handleSaveCardMeta = async (cardId: string) => {
+    if (!activeProjectId) return;
+
+    // Find the card to get its current fields
+    let cardFields: any[] = [];
+    frameworkData.forEach(step => {
+      const card = step.cards.find(c => c.id === cardId);
+      if (card) {
+        cardFields = card.fields;
+      }
+    });
+
+    // Update in database with project_id filter
+    await updateCard(cardId, activeProjectId, {
+      title: tempCardTitle.trim(),
+      description: tempCardDesc.trim(),
+      fields: cardFields
+    });
+
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
@@ -1162,22 +1317,39 @@ export default function Pass5MasterApp() {
     setEditingCardId(null);
   };
 
-  const handleAddFieldToCard = (cardId: string) => {
-    if (!newFieldLabel.trim()) return;
+  const handleAddFieldToCard = async (cardId: string) => {
+    if (!newFieldLabel.trim() || !activeProjectId) return;
     const opts = newFieldOptionsStr.split(',').map(o => o.trim()).filter(Boolean);
 
-    setFrameworkData(prev => prev.map(step => ({
+    // Find the card and its current fields
+    let currentFields: any[] = [];
+    frameworkData.forEach(step => {
+      const card = step.cards.find(c => c.id === cardId);
+      if (card) {
+        currentFields = card.fields;
+      }
+    });
+
+    const newFieldObj = {
+      id: `field_${Date.now()}`,
+      label: newFieldLabel.trim(),
+      options: opts.length > 0 ? opts : ['기본 옵션 1', '기본 옵션 2']
+    };
+
+    const updatedFields = [...currentFields, newFieldObj];
+
+    // Update in database with project_id filter
+    await updateCard(cardId, activeProjectId, {
+      fields: updatedFields
+    });
+
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
-          const newFieldObj = {
-            id: `field_${Date.now()}`,
-            label: newFieldLabel.trim(),
-            options: opts.length > 0 ? opts : ['기본 옵션 1', '기본 옵션 2']
-          };
           return {
             ...card,
-            fields: [...card.fields, newFieldObj]
+            fields: updatedFields
           };
         }
         return card;
@@ -1189,14 +1361,32 @@ export default function Pass5MasterApp() {
     setEditingFieldCardId(null);
   };
 
-  const handleDeleteFieldFromCard = (cardId: string, fieldId: string) => {
-    setFrameworkData(prev => prev.map(step => ({
+  const handleDeleteFieldFromCard = async (cardId: string, fieldId: string) => {
+    if (!activeProjectId) return;
+
+    // Find the card and its current fields
+    let currentFields: any[] = [];
+    frameworkData.forEach(step => {
+      const card = step.cards.find(c => c.id === cardId);
+      if (card) {
+        currentFields = card.fields;
+      }
+    });
+
+    const updatedFields = currentFields.filter((f: any) => f.id !== fieldId);
+
+    // Update in database with project_id filter
+    await updateCard(cardId, activeProjectId, {
+      fields: updatedFields
+    });
+
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
           return {
             ...card,
-            fields: card.fields.filter((f: any) => f.id !== fieldId)
+            fields: updatedFields
           };
         }
         return card;
@@ -1204,15 +1394,34 @@ export default function Pass5MasterApp() {
     })));
   };
 
-  const handleUpdateFieldLabel = (cardId: string, fieldId: string) => {
-    if (!tempFieldLabel.trim()) return;
-    setFrameworkData(prev => prev.map(step => ({
+  const handleUpdateFieldLabel = async (cardId: string, fieldId: string) => {
+    if (!tempFieldLabel.trim() || !activeProjectId) return;
+
+    // Find the card and its current fields
+    let currentFields: any[] = [];
+    frameworkData.forEach(step => {
+      const card = step.cards.find(c => c.id === cardId);
+      if (card) {
+        currentFields = card.fields;
+      }
+    });
+
+    const updatedFields = currentFields.map((f: any) => 
+      f.id === fieldId ? { ...f, label: tempFieldLabel.trim() } : f
+    );
+
+    // Update in database with project_id filter
+    await updateCard(cardId, activeProjectId, {
+      fields: updatedFields
+    });
+
+    updateFrameworkData(prev => prev.map(step => ({
       ...step,
       cards: step.cards.map(card => {
         if (card.id === cardId) {
           return {
             ...card,
-            fields: card.fields.map((f: any) => f.id === fieldId ? { ...f, label: tempFieldLabel.trim() } : f)
+            fields: updatedFields
           };
         }
         return card;
@@ -1395,189 +1604,37 @@ export default function Pass5MasterApp() {
       <div className="flex flex-1 overflow-hidden">
         
         {/* 사이드바 */}
-        <aside className={`${isSidebarOpen ? 'w-64' : 'w-8'} transition-all duration-300 flex flex-col justify-between p-3 bg-transparent border-r border-zinc-500/10 overflow-hidden`}>
-          <div>
-            <div className={`flex items-center mb-6 px-1 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
-              {isSidebarOpen && <span className="font-bold text-xs tracking-wider opacity-70 cursor-pointer" onClick={() => navigateTo('kanban')}>{t.workspace}</span>}
-              <button 
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className={`p-1.5 rounded-md text-xs transition ${isDark ? 'hover:bg-zinc-800/60 text-zinc-400' : 'hover:bg-zinc-200/60 text-zinc-650'}`}
-              >
-                {isSidebarOpen ? '◀' : '▶'}
-              </button>
-            </div>
-
-            {isSidebarOpen && (
-              <div className="mb-4">
-                <div className="flex items-center justify-between mb-2 px-1">
-                  <div className="flex items-center gap-1.5 cursor-pointer" onClick={() => setIsFolderOpen(!isFolderOpen)}>
-                    <span className="text-[10px] opacity-60">{isFolderOpen ? '▼' : '▶'}</span>
-                    <span className="text-[10px] font-medium opacity-40 uppercase tracking-wider">{t.projects} (폴더 관리)</span>
-                  </div>
-                  <div className="flex gap-1">
-                    <button
-                      type="button"
-                      onClick={() => setIsAddingProject(!isAddingProject)}
-                      className="text-[10px] px-1.5 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold hover:bg-blue-500/30 transition"
-                    >
-                      {t.addProjectBtn}
-                    </button>
-                    {activeProject && (currentUserRole === 'owner' || currentUserRole === 'admin') && (
-                      <button
-                        type="button"
-                        onClick={() => setIsInviteModalOpen(true)}
-                        className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-semibold hover:bg-emerald-500/30 transition"
-                        title="팀원 초대"
-                      >
-                        👥 초대
-                      </button>
-                    )}
-                  </div>
-                </div>
-
-                {isAddingProject && (
-                  <form onSubmit={handleAddProject} className="flex flex-col gap-1.5 mb-2.5 p-2 rounded-lg bg-zinc-500/10">
-                    <input
-                      type="text"
-                      autoFocus
-                      value={newProjName}
-                      onChange={(e) => setNewProjName(e.target.value)}
-                      placeholder={t.projPlaceholder}
-                      className={`px-2 py-1.5 text-xs rounded outline-none border ${isDark ? 'bg-zinc-900 border-zinc-700 text-white placeholder:text-zinc-600' : 'bg-white border-zinc-300 text-zinc-800 placeholder:text-zinc-400'}`}
-                    />
-                    <div className="flex justify-end gap-1">
-                      <button
-                        type="button"
-                        onClick={() => setIsAddingProject(false)}
-                        className="px-2 py-0.5 text-[10px] rounded bg-zinc-600 text-white"
-                      >
-                        취소
-                      </button>
-                      <button
-                        type="submit"
-                        className="px-2 py-0.5 text-[10px] rounded bg-blue-600 text-white font-semibold"
-                      >
-                        생성
-                      </button>
-                    </div>
-                  </form>
-                )}
-
-                {isFolderOpen && (
-                  <div className="flex flex-col gap-1 max-h-[40vh] overflow-y-auto pr-1">
-                    {projects.map((proj) => {
-                      const isEditing = sidebarEditingProjId === proj.id;
-                      return (
-                        <div
-                          key={proj.id}
-                          draggable={!isEditing}
-                          onDragStart={(e) => handleProjectDragStart(e, proj.id)}
-                          onDragOver={handleDragOver}
-                          onDrop={(e) => handleProjectDrop(e, proj.id)}
-                          onClick={() => {
-                            if (!isEditing) {
-                              setActiveProjectId(proj.id);
-                              navigateTo('kanban');
-                            }
-                          }}
-                          className={`group flex items-center justify-between px-2.5 py-2 text-xs rounded-lg transition cursor-pointer ${
-                            activeProjectId === proj.id
-                              ? (isDark ? 'bg-zinc-800/80 font-medium text-white' : 'bg-zinc-200/80 font-medium text-zinc-900')
-                              : (isDark ? 'opacity-70 hover:bg-zinc-800/40 hover:opacity-100' : 'opacity-70 hover:bg-zinc-200/40 hover:opacity-100')
-                          }`}
-                        >
-                          {isEditing ? (
-                            <input
-                              type="text"
-                              autoFocus
-                              value={sidebarTempName}
-                              onChange={(e) => setSidebarTempName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleCommitSidebarProjectName(proj.id);
-                                if (e.key === 'Escape') setSidebarEditingProjId(null);
-                              }}
-                              onBlur={() => handleCommitSidebarProjectName(proj.id)}
-                              onClick={(e) => e.stopPropagation()}
-                              className={`w-full bg-transparent outline-none border-b border-blue-500 text-xs ${isDark ? 'text-white' : 'text-zinc-900'}`}
-                            />
-                          ) : (
-                            <div className="flex items-center gap-2 truncate flex-1">
-                              <span>📁</span>
-                              <span className="truncate">{proj.name}</span>
-                            </div>
-                          )}
-
-                          {!isEditing && (
-                            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition ml-1">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDuplicateProject(proj);
-                                }}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-600/30 hover:bg-emerald-600 text-emerald-200"
-                                title="프로젝트 복제"
-                              >
-                                📋
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  setSidebarEditingProjId(proj.id);
-                                  setSidebarTempName(proj.name);
-                                }}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300"
-                                title="이름 수정"
-                              >
-                                ✏️
-                              </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  if (confirm(`"${proj.name}" 프로젝트를 삭제하시겠습니까?`)) {
-                                    handleDeleteProject(proj.id);
-                                  }
-                                }}
-                                className="text-[10px] px-1.5 py-0.5 rounded bg-rose-500/30 hover:bg-rose-500 text-rose-200"
-                                title="프로젝트 삭제"
-                              >
-                                ✕
-                              </button>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            )}
-
-            {isSidebarOpen && (
-              <div className="mt-6 pt-4 border-t border-zinc-500/10">
-                <div className="text-[10px] font-medium opacity-40 uppercase tracking-wider mb-2 px-1">{t.focusViews}</div>
-                <div className="flex flex-col gap-1">
-                  {frameworkData.map((step, sIdx) => (
-                    <button
-                      key={sIdx}
-                      onClick={() => navigateTo('focus', { stepKey: step.stepKey })}
-                      className={`flex items-center justify-between px-2.5 py-1.5 text-xs rounded-lg transition text-left ${
-                        viewMode === 'focus' && focusStepKey === step.stepKey
-                          ? 'bg-blue-600 text-white font-medium'
-                          : (isDark ? 'opacity-70 hover:bg-zinc-800/40 hover:opacity-100' : 'opacity-70 hover:bg-zinc-200/40 hover:opacity-100')
-                      }`}
-                    >
-                      <span>{step.title}</span>
-                      <span className="text-[10px] opacity-60">집중 →</span>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </aside>
+        <ProjectSidebar
+          isSidebarOpen={isSidebarOpen}
+          setIsSidebarOpen={setIsSidebarOpen}
+          isFolderOpen={isFolderOpen}
+          setIsFolderOpen={setIsFolderOpen}
+          projects={projects}
+          activeProjectId={activeProjectId}
+          setActiveProjectId={setActiveProjectId}
+          isAddingProject={isAddingProject}
+          setIsAddingProject={setIsAddingProject}
+          newProjName={newProjName}
+          setNewProjName={setNewProjName}
+          sidebarEditingProjId={sidebarEditingProjId}
+          setSidebarEditingProjId={setSidebarEditingProjId}
+          sidebarTempName={sidebarTempName}
+          setSidebarTempName={setSidebarTempName}
+          currentUserRole={currentUserRole}
+          frameworkData={frameworkData}
+          navigateTo={navigateTo}
+          handleAddProject={handleAddProject}
+          handleProjectDragStart={handleProjectDragStart}
+          handleProjectDrop={handleProjectDrop}
+          handleDuplicateProject={handleDuplicateProject}
+          handleDeleteProject={handleDeleteProject}
+          handleCommitSidebarProjectName={handleCommitSidebarProjectName}
+          t={t}
+          isDark={isDark}
+          setIsInviteModalOpen={setIsInviteModalOpen}
+          viewMode={viewMode}
+          focusStepKey={focusStepKey}
+        />
 
 
         {/* 메인 콘텐츠 영역 */}
@@ -1666,267 +1723,43 @@ export default function Pass5MasterApp() {
 
           {/* 1. 전체 칸반 보드 뷰 */}
           {viewMode === 'kanban' && (
-            <div className="flex-1 flex flex-col">
-              <div className="mb-4 flex justify-between items-center">
-                <p className="text-xs opacity-50">{t.kanbanGuide}</p>
-                <div className="flex items-center gap-2">
-                  <span className="text-[10px] px-2 py-1 rounded bg-emerald-500/20 text-emerald-400 font-medium">{t.completed100}</span>
-                  <span className="text-[10px] px-2 py-1 rounded bg-zinc-500/20 text-zinc-400 font-medium">{t.inProgress}</span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 pb-6 min-w-[1100px]">
-                {frameworkData.map((col, cIdx) => {
-                  const isEditingThisStep = editingStepMetaKey === col.stepKey;
-
-                  return (
-                    <div 
-                      key={cIdx}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, col.stepKey)}
-                      className={`rounded-xl p-3.5 flex flex-col gap-3 min-h-[500px] transition ${isDark ? 'bg-zinc-900/40 border border-zinc-800/60' : 'bg-zinc-200/30 border border-zinc-200/60 shadow-sm'}`}
-                    >
-                      <div className="pb-2 border-b border-zinc-500/10 flex justify-between items-start group/header p-1 rounded-lg transition">
-                        {isEditingThisStep ? (
-                          <div className="flex flex-col gap-1.5 w-full">
-                            <input
-                              type="text"
-                              value={tempStepTitle}
-                              onChange={(e) => setTempStepTitle(e.target.value)}
-                              placeholder="단계명 수정..."
-                              className={`w-full p-1 text-xs font-bold rounded border outline-none ${isDark ? 'bg-zinc-800 border-blue-500 text-white' : 'bg-white border-blue-400 text-zinc-900'}`}
-                            />
-                            <input
-                              type="text"
-                              value={tempStepSubtitle}
-                              onChange={(e) => setTempStepSubtitle(e.target.value)}
-                              placeholder="부제목 설명 수정..."
-                              className={`w-full p-1 text-[10px] rounded border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-300 text-zinc-700'}`}
-                            />
-                            <div className="flex justify-end gap-1">
-                              <button onClick={() => setEditingStepMetaKey(null)} className="px-2 py-0.5 text-[10px] rounded bg-zinc-600 text-white">취소</button>
-                              <button onClick={() => handleCommitStepMeta(col.stepKey)} className="px-2 py-0.5 text-[10px] rounded bg-blue-600 text-white font-semibold">저장</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <>
-                            <div onClick={() => navigateTo('focus', { stepKey: col.stepKey })} className="cursor-pointer flex-1">
-                              <div className="flex items-center gap-1.5">
-                                <h3 className="font-extrabold text-base tracking-tight hover:text-blue-400 transition">{col.title}</h3>
-                                <button
-                                  type="button"
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setEditingStepMetaKey(col.stepKey);
-                                    setTempStepTitle(col.title);
-                                    setTempStepSubtitle(col.subtitle);
-                                  }}
-                                  className="opacity-0 group-hover/header:opacity-100 text-[10px] px-1 py-0.5 rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300 transition"
-                                  title="단계명 및 설명 수정"
-                                >
-                                  ✏️
-                                </button>
-                              </div>
-                              <p className="text-[10px] opacity-40 leading-tight mt-0.5">{col.subtitle}</p>
-                            </div>
-                            <span 
-                              onClick={() => navigateTo('focus', { stepKey: col.stepKey })}
-                              className="text-[10px] text-blue-400 font-medium opacity-0 group-hover/header:opacity-100 transition whitespace-nowrap cursor-pointer ml-1"
-                            >
-                              {t.focusGo}
-                            </span>
-                          </>
-                        )}
-                      </div>
-
-                      <div className="flex flex-col gap-3 flex-1">
-                        {col.cards.map((card) => {
-                          const progress = getCardProgress(card);
-                          const isCompleted = progress === 100;
-                          const isEditingMeta = editingCardId === card.id;
-
-                          return (
-                            <div
-                              key={card.id}
-                              draggable={!isEditingMeta}
-                              onDragStart={(e) => handleDragStart(e, card.id)}
-                              onDragOver={handleDragOver}
-                              onDrop={(e) => handleDrop(e, col.stepKey, card.id)}
-                              className={`p-3.5 rounded-xl text-xs transition relative group border ${
-                                isCompleted
-                                  ? (isDark ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-emerald-50/80 border-emerald-300')
-                                  : (isDark ? 'bg-zinc-800/60 border-zinc-700/50 text-zinc-200' : 'bg-white border-zinc-200 text-zinc-800 shadow-xs')
-                              }`}
-                            >
-                              {isEditingMeta ? (
-                                <div className="flex flex-col gap-2" onClick={(e) => e.stopPropagation()}>
-                                  <input
-                                    type="text"
-                                    value={tempCardTitle}
-                                    onChange={(e) => setTempCardTitle(e.target.value)}
-                                    className={`w-full p-1.5 text-xs font-bold rounded border outline-none ${isDark ? 'bg-zinc-900 border-blue-500 text-white' : 'bg-white border-blue-400 text-zinc-900'}`}
-                                    placeholder="카드 질문 제목 수정..."
-                                  />
-                                  <textarea
-                                    rows={2}
-                                    value={tempCardDesc}
-                                    onChange={(e) => setTempCardDesc(e.target.value)}
-                                    className={`w-full p-1.5 text-[10px] rounded border outline-none resize-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-300' : 'bg-zinc-50 border-zinc-300 text-zinc-700'}`}
-                                    placeholder="설명 문구 수정..."
-                                  />
-                                  <div className="flex justify-end gap-1 mt-1">
-                                    <button onClick={() => setEditingCardId(null)} className="px-2 py-1 text-[10px] rounded bg-zinc-600 text-white">취소</button>
-                                    <button onClick={() => handleSaveCardMeta(card.id)} className="px-2 py-1 text-[10px] rounded bg-blue-600 text-white font-semibold">저장</button>
-                                  </div>
-                                </div>
-                              ) : (
-                                <>
-                                  <div onClick={() => navigateTo('detail', { cardId: card.id })} className="cursor-pointer">
-                                    <div className="flex justify-between items-center mb-1">
-                                      <span className={`text-[10px] font-bold ${isCompleted ? 'text-emerald-400' : 'text-blue-400'}`}>
-                                        {isCompleted ? '✓ 완료됨' : `${progress}% 진행`}
-                                      </span>
-                                      <div className="flex items-center gap-1">
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            setEditingCardId(card.id);
-                                            setTempCardTitle(card.title);
-                                            setTempCardDesc(card.desc);
-                                          }}
-                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-zinc-700/60 hover:bg-zinc-700 text-zinc-300 transition"
-                                        >
-                                          ✏️
-                                        </button>
-                                        <button
-                                          onClick={(e) => {
-                                            e.stopPropagation();
-                                            if (confirm(`"${card.title}" 카드를 삭제하시겠습니까?`)) {
-                                              handleDeleteCard(card.id);
-                                            }
-                                          }}
-                                          className="opacity-0 group-hover:opacity-100 text-[10px] px-1.5 py-0.5 rounded bg-rose-500/20 hover:bg-rose-500/40 text-rose-400 transition"
-                                        >
-                                          ✕
-                                        </button>
-                                      </div>
-                                    </div>
-                                    <div className="font-bold text-xs mb-1 hover:text-blue-400 transition">{card.title}</div>
-                                    <p className="text-[10px] opacity-60 line-clamp-2 leading-relaxed">{card.desc}</p>
-                                  </div>
-
-                                  <div onClick={() => navigateTo('detail', { cardId: card.id })} className="mt-3 pt-2 border-t border-zinc-500/10 cursor-pointer">
-                                    <div className="w-full bg-zinc-700/30 h-1.5 rounded-full overflow-hidden">
-                                      <div className={`h-full transition-all duration-300 ${isCompleted ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${progress}%` }}></div>
-                                    </div>
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          );
-                        })}
-
-                        {addingCardStepKey === col.stepKey ? (
-                          <div className={`p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900 border-blue-500/50' : 'bg-white border-blue-400 shadow-md'}`}>
-                            <div className="font-bold text-xs text-blue-400">새 의사결정 카드 생성</div>
-                            <input
-                              type="text"
-                              placeholder="의사결정 중심 질문 제목..."
-                              value={newCardTitle}
-                              onChange={(e) => setNewCardTitle(e.target.value)}
-                              className={`w-full p-2 text-xs rounded border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
-                            />
-                            <textarea
-                              rows={2}
-                              placeholder="이 카드가 던지는 핵심 질문 설명..."
-                              value={newCardDesc}
-                              onChange={(e) => setNewCardDesc(e.target.value)}
-                              className={`w-full p-2 text-[10px] rounded border outline-none resize-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-zinc-50 border-zinc-300 text-zinc-700'}`}
-                            />
-
-                            <div className="flex flex-col gap-2 pt-2 border-t border-zinc-500/10">
-                              <div className="flex justify-between items-center">
-                                <span className="text-[10px] font-bold opacity-70">하위 세부 질문 항목 구성</span>
-                                <button
-                                  type="button"
-                                  onClick={() => setNewCardFields([...newCardFields, { label: '', optionsStr: '' }])}
-                                  className="text-[10px] px-2 py-0.5 rounded bg-blue-500/20 text-blue-400 font-semibold"
-                                >
-                                  + 항목 추가
-                                </button>
-                              </div>
-
-                              {newCardFields.map((nf, nfIdx) => (
-                                <div key={nfIdx} className="flex flex-col gap-1.5 p-2 rounded bg-zinc-500/10">
-                                  <div className="flex gap-1">
-                                    <input
-                                      type="text"
-                                      placeholder={`항목 ${nfIdx + 1} 질문`}
-                                      value={nf.label}
-                                      onChange={(e) => {
-                                        const updated = [...newCardFields];
-                                        updated[nfIdx].label = e.target.value;
-                                        setNewCardFields(updated);
-                                      }}
-                                      className={`flex-1 p-1.5 text-[11px] rounded border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
-                                    />
-                                    {newCardFields.length > 1 && (
-                                      <button
-                                        type="button"
-                                        onClick={() => setNewCardFields(newCardFields.filter((_, i) => i !== nfIdx))}
-                                        className="px-2 text-xs text-rose-400 hover:bg-rose-500/20 rounded"
-                                      >
-                                        ✕
-                                      </button>
-                                    )}
-                                  </div>
-                                  <div className="flex gap-1">
-                                    <input
-                                      type="text"
-                                      placeholder="보기 옵션들 (쉼표 구분)"
-                                      value={nf.optionsStr}
-                                      onChange={(e) => {
-                                        const updated = [...newCardFields];
-                                        updated[nfIdx].optionsStr = e.target.value;
-                                        setNewCardFields(updated);
-                                      }}
-                                      className={`flex-1 p-1.5 text-[10px] rounded border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-zinc-300' : 'bg-white border-zinc-300 text-zinc-700'}`}
-                                    />
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPickerTargetType('newCardField');
-                                        setPickerTargetFieldIndex(nfIdx);
-                                        setIsPickerOpen(true);
-                                      }}
-                                      className="px-2 py-1 text-[10px] rounded bg-blue-600 hover:bg-blue-500 text-white font-medium"
-                                    >
-                                      📋 기존 옵션 가져오기
-                                    </button>
-                                  </div>
-                                </div>
-                              ))}
-                            </div>
-
-                            <div className="flex justify-end gap-1 mt-1">
-                              <button onClick={() => setAddingCardStepKey(null)} className="px-3 py-1.5 text-xs rounded bg-zinc-600 text-white">취소</button>
-                              <button onClick={() => handleCreateCard(col.stepKey)} className="px-3 py-1.5 text-xs rounded bg-blue-600 text-white font-semibold">생성하기</button>
-                            </div>
-                          </div>
-                        ) : (
-                          <button
-                            onClick={() => setAddingCardStepKey(col.stepKey)}
-                            className={`w-full py-2 text-xs font-medium rounded-xl border border-dashed transition ${isDark ? 'border-zinc-700 text-zinc-400 hover:bg-zinc-800/40 hover:text-white' : 'border-zinc-300 text-zinc-600 hover:bg-zinc-200/50 hover:text-zinc-900'}`}
-                          >
-                            {t.addCard}
-                          </button>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
+            <KanbanBoard
+              frameworkData={frameworkData}
+              isDark={isDark}
+              t={t}
+              editingStepMetaKey={editingStepMetaKey}
+              tempStepTitle={tempStepTitle}
+              tempStepSubtitle={tempStepSubtitle}
+              editingCardId={editingCardId}
+              tempCardTitle={tempCardTitle}
+              tempCardDesc={tempCardDesc}
+              addingCardStepKey={addingCardStepKey}
+              newCardTitle={newCardTitle}
+              newCardDesc={newCardDesc}
+              newCardFields={newCardFields}
+              getCardProgress={getCardProgress}
+              navigateTo={navigateTo}
+              handleDragOver={handleDragOver}
+              handleDrop={handleDrop}
+              handleDragStart={handleDragStart}
+              handleCommitStepMeta={handleCommitStepMeta}
+              handleSaveCardMeta={handleSaveCardMeta}
+              handleDeleteCard={handleDeleteCard}
+              handleCreateCard={handleCreateCard}
+              setEditingStepMetaKey={setEditingStepMetaKey}
+              setTempStepTitle={setTempStepTitle}
+              setTempStepSubtitle={setTempStepSubtitle}
+              setEditingCardId={setEditingCardId}
+              setTempCardTitle={setTempCardTitle}
+              setTempCardDesc={setTempCardDesc}
+              setAddingCardStepKey={setAddingCardStepKey}
+              setNewCardTitle={setNewCardTitle}
+              setNewCardDesc={setNewCardDesc}
+              setNewCardFields={setNewCardFields}
+              setPickerTargetType={setPickerTargetType}
+              setPickerTargetFieldIndex={setPickerTargetFieldIndex}
+              setIsPickerOpen={setIsPickerOpen}
+            />
           )}
 
 
@@ -2445,55 +2278,6 @@ export default function Pass5MasterApp() {
         </main>
       </div>
 
-      {/* 초대하기 팝업 모달 */}
-      {isInviteModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/70 p-4 backdrop-blur-xs">
-          <div className={`w-full max-w-sm rounded-2xl p-6 border shadow-2xl flex flex-col gap-4 ${isDark ? 'bg-zinc-900 border-zinc-700 text-zinc-100' : 'bg-white border-zinc-300 text-zinc-900'}`}>
-            <div className="flex justify-between items-center pb-3 border-b border-zinc-500/20">
-              <h3 className="text-sm font-bold flex items-center gap-2">
-                <span>💌</span> 팀원 초대하기
-              </h3>
-              <button onClick={() => setIsInviteModalOpen(false)} className="text-xs opacity-60 hover:opacity-100">✕ 닫기</button>
-            </div>
-
-            <div className="flex flex-col gap-3">
-              <div>
-                <label className="text-[11px] font-bold opacity-60 mb-1 block">초대할 이메일</label>
-                <input
-                  type="email"
-                  placeholder="colleague@example.com"
-                  value={inviteEmail}
-                  onChange={(e) => setInviteEmail(e.target.value)}
-                  className={`w-full px-3 py-2 text-xs rounded-lg outline-none border transition ${isDark ? 'bg-zinc-800 border-zinc-700 text-white focus:border-blue-500' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-400'}`}
-                />
-              </div>
-
-              <div>
-                <label className="text-[11px] font-bold opacity-60 mb-1 block">부여할 역할 (권한)</label>
-                <select
-                  value={inviteRole}
-                  onChange={(e) => setInviteRole(e.target.value)}
-                  className={`w-full px-3 py-2 text-xs rounded-lg outline-none border transition ${isDark ? 'bg-zinc-800 border-zinc-700 text-white focus:border-blue-500' : 'bg-zinc-50 border-zinc-300 text-zinc-900 focus:border-blue-400'}`}
-                >
-                  <option value="admin">관리자 (초대/멤버관리/편집/보기 가능)</option>
-                  <option value="member">멤버 (내용 편집 및 보기 가능)</option>
-                  <option value="viewer">뷰어 (보기만 가능, 외부 클라이언트용)</option>
-                </select>
-              </div>
-            </div>
-
-            <div className="pt-3 border-t border-zinc-500/20 flex justify-end gap-2">
-              <button onClick={() => setIsInviteModalOpen(false)} className="px-4 py-2 text-xs rounded-lg bg-zinc-600 text-white hover:bg-zinc-500 transition">
-                취소
-              </button>
-              <button onClick={handleSendInvite} className="px-4 py-2 text-xs font-semibold rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition">
-                초대 메일 보내기
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* 5. 기존 옵션 가져오기(Picker) 모달 창 */}
       {isPickerOpen && (() => {
         const query = pickerSearchQuery.trim().toLowerCase();
@@ -2672,69 +2456,16 @@ export default function Pass5MasterApp() {
       })()}
 
       {/* 초대 모달 */}
-      {isInviteModalOpen && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className={`w-full max-w-md rounded-2xl border shadow-2xl ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200'}`}>
-            <div className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h3 className="text-lg font-bold">팀원 초대</h3>
-                <button
-                  onClick={() => setIsInviteModalOpen(false)}
-                  className={`text-sm ${isDark ? 'text-zinc-400 hover:text-white' : 'text-zinc-600 hover:text-zinc-900'}`}
-                >
-                  ✕
-                </button>
-              </div>
-
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">이메일 주소</label>
-                  <input
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="example@email.com"
-                    className={`w-full px-4 py-2.5 text-sm rounded-lg border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">권한 선택</label>
-                  <select
-                    value={inviteRole}
-                    onChange={(e) => setInviteRole(e.target.value)}
-                    className={`w-full px-4 py-2.5 text-sm rounded-lg border outline-none ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
-                  >
-                    <option value="admin">관리자 (Admin) - 다른 사람 초대, 멤버 관리, 편집 및 보기 가능</option>
-                    <option value="member">멤버 (Member) - 내용 편집 및 보기 가능</option>
-                    <option value="viewer">뷰어 (Viewer) - 보기만 가능</option>
-                  </select>
-                </div>
-
-                <div className={`p-3 rounded-lg text-xs ${isDark ? 'bg-zinc-800/50 text-zinc-400' : 'bg-zinc-100 text-zinc-600'}`}>
-                  <p>💡 초대를 보내면 상대방이 이메일로 초대 링크를 받게 됩니다. 또는 초대 링크를 복사해서 카카오톡이나 메신저로 공유할 수도 있습니다.</p>
-                </div>
-              </div>
-
-              <div className="flex gap-3 mt-6">
-                <button
-                  onClick={() => setIsInviteModalOpen(false)}
-                  className={`flex-1 px-4 py-2.5 text-sm rounded-lg font-medium transition ${isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300'}`}
-                >
-                  취소
-                </button>
-                <button
-                  onClick={handleSendInvite}
-                  disabled={!inviteEmail}
-                  className={`flex-1 px-4 py-2.5 text-sm rounded-lg font-medium transition bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
-                >
-                  초대 보내기
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      <InviteModal
+        isOpen={isInviteModalOpen}
+        onClose={() => setIsInviteModalOpen(false)}
+        inviteEmail={inviteEmail}
+        setInviteEmail={setInviteEmail}
+        inviteRole={inviteRole}
+        setInviteRole={setInviteRole}
+        onSendInvite={handleSendInvite}
+        isDark={isDark}
+      />
 
     </div>
   );

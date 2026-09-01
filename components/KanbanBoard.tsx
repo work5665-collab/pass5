@@ -1,87 +1,83 @@
-import React from 'react';
-import { Step, Card } from '../types';
+'use client';
 
-interface KanbanViewProps {
+import React from 'react';
+import { ViewMode, DictType, Field, Card, Step, NewCardField } from '../lib/types';
+
+interface KanbanBoardProps {
   frameworkData: Step[];
   isDark: boolean;
-  viewMode: string;
-  navigateTo: (mode: any, extra?: any) => void;
-  getCardProgress: (card: Card) => number;
-  
+  t: DictType;
   editingStepMetaKey: string | null;
-  setEditingStepMetaKey: (key: string | null) => void;
   tempStepTitle: string;
-  setTempStepTitle: (val: string) => void;
   tempStepSubtitle: string;
-  setTempStepSubtitle: (val: string) => void;
-  handleCommitStepMeta: (stepKey: string) => void;
-
   editingCardId: string | null;
-  setEditingCardId: (id: string | null) => void;
   tempCardTitle: string;
-  setTempCardTitle: (val: string) => void;
   tempCardDesc: string;
-  setTempCardDesc: (val: string) => void;
-  handleSaveCardMeta: (cardId: string) => void;
-  handleDeleteCard: (cardId: string) => void;
-
   addingCardStepKey: string | null;
-  setAddingCardStepKey: (key: string | null) => void;
   newCardTitle: string;
-  setNewCardTitle: (val: string) => void;
   newCardDesc: string;
-  setNewCardDesc: (val: string) => void;
-  newCardFields: { label: string; optionsStr: string }[];
-  setNewCardFields: (fields: { label: string; optionsStr: string }[]) => void;
-  handleCreateCard: (stepKey: string) => void;
-
-  handleDragStart: (e: React.DragEvent, cardId: string) => void;
+  newCardFields: NewCardField[];
+  getCardProgress: (card: Card) => number;
+  navigateTo: (mode: ViewMode, options?: { stepKey?: string; cardId?: string }) => void;
   handleDragOver: (e: React.DragEvent) => void;
   handleDrop: (e: React.DragEvent, targetStepKey: string, targetCardId?: string) => void;
-  
-  setPickerTargetType: (type: any) => void;
-  setPickerTargetFieldIndex: (idx: number) => void;
-  setIsPickerOpen: (isOpen: boolean) => void;
-  t: any;
+  handleDragStart: (e: React.DragEvent, cardId: string) => void;
+  handleCommitStepMeta: (stepKey: string) => void;
+  handleSaveCardMeta: (cardId: string) => void;
+  handleDeleteCard: (cardId: string) => void;
+  handleCreateCard: (stepKey: string) => void;
+  setEditingStepMetaKey: (key: string | null) => void;
+  setTempStepTitle: (title: string) => void;
+  setTempStepSubtitle: (subtitle: string) => void;
+  setEditingCardId: (id: string | null) => void;
+  setTempCardTitle: (title: string) => void;
+  setTempCardDesc: (desc: string) => void;
+  setAddingCardStepKey: (key: string | null) => void;
+  setNewCardTitle: (title: string) => void;
+  setNewCardDesc: (desc: string) => void;
+  setNewCardFields: (fields: NewCardField[]) => void;
+  setPickerTargetType: (type: 'newField' | 'newCardField' | 'existingField') => void;
+  setPickerTargetFieldIndex: (index: number | null) => void;
+  setIsPickerOpen: (open: boolean) => void;
 }
 
-export default function KanbanView({
+export default function KanbanBoard({
   frameworkData,
   isDark,
-  navigateTo,
-  getCardProgress,
+  t,
   editingStepMetaKey,
-  setEditingStepMetaKey,
   tempStepTitle,
-  setTempStepTitle,
   tempStepSubtitle,
-  setTempStepSubtitle,
-  handleCommitStepMeta,
   editingCardId,
-  setEditingCardId,
   tempCardTitle,
-  setTempCardTitle,
   tempCardDesc,
-  setTempCardDesc,
-  handleSaveCardMeta,
-  handleDeleteCard,
   addingCardStepKey,
-  setAddingCardStepKey,
   newCardTitle,
-  setNewCardTitle,
   newCardDesc,
-  setNewCardDesc,
   newCardFields,
-  setNewCardFields,
-  handleCreateCard,
-  handleDragStart,
+  getCardProgress,
+  navigateTo,
   handleDragOver,
   handleDrop,
+  handleDragStart,
+  handleCommitStepMeta,
+  handleSaveCardMeta,
+  handleDeleteCard,
+  handleCreateCard,
+  setEditingStepMetaKey,
+  setTempStepTitle,
+  setTempStepSubtitle,
+  setEditingCardId,
+  setTempCardTitle,
+  setTempCardDesc,
+  setAddingCardStepKey,
+  setNewCardTitle,
+  setNewCardDesc,
+  setNewCardFields,
   setPickerTargetType,
   setPickerTargetFieldIndex,
   setIsPickerOpen,
-  t
-}: KanbanViewProps) {
+}: KanbanBoardProps) {
   return (
     <div className="flex-1 flex flex-col">
       <div className="mb-4 flex justify-between items-center">
