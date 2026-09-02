@@ -1,441 +1,18 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
-import { createClient } from '@supabase/supabase-js';
+import React, { useState, useEffect, useRef } from 'react';
 import InviteModal from './components/InviteModal';
 import ProjectSidebar from './components/ProjectSidebar';
 import KanbanBoard from '../components/KanbanBoard';
-import { ViewMode, LangMode, DictType, Project } from '../lib/types';
-import { 
-  fetchCardsByProject, 
-  createCard, 
-  updateCard, 
-  deleteCard, 
-  updateCardStep,
-  duplicateCardsForProject,
-  deleteAllCardsByProject
-} from '../lib/supabase/cards';
-
-// Supabase 초기화
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
-const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
-const supabase = createClient(supabaseUrl, supabaseKey);
-
-// PASS 5 단계별 카드 및 세부 점검 필드 기본 데이터 (의사결정 중심 질문형 구성)
-const initialFrameworkData = [
-  {
-    stepKey: 'Input',
-    title: 'Input',
-    subtitle: '프로젝트의 방향성을 잡는 단계',
-    cards: [
-      {
-        id: 'purpose_and_problem',
-        title: '목적과 문제 정의',
-        desc: '이 프로젝트를 왜 시작하며 어떤 문제를 해결하려 하는가?',
-        fields: [
-          {
-            id: 'in_p_why',
-            label: '1-1. 프로젝트를 시작하는 근본적인 이유와 배경',
-            options: [
-              '파편화된 업무 프로세스의 일원화 및 효율성 극대화',
-              '수동 반복 업무 자동화를 통한 시간 및 자원 절감',
-              '직관적이지 않은 워크플로우의 객관적 표준화 구축'
-            ]
-          },
-          {
-            id: 'in_p_problem',
-            label: '1-2. 해결하고자 하는 핵심 문제 및 페인 포인트',
-            options: [
-              '부서 간 커뮤니케이션 오류 및 산출물 누락 발생',
-              '반복적인 수작업으로 인한 리소스 낭비와 피로도 누적',
-              '모호한 의사결정 기준과 주관적 판단으로 인한 지연'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'target_analysis',
-        title: '타깃 분석',
-        desc: '누구를 위한 것이며 그들이 겪는 핵심 불편함은 무엇인가?',
-        fields: [
-          {
-            id: 'in_t_who',
-            label: '2-1. 주요 수혜자 및 실무 타깃 오디언스',
-            options: [
-              '프로젝트 기획 및 워크플로우 관리자 (PM/PL)',
-              '실무 프로덕트 메이커 및 1인 개발자 (인디 해커)',
-              '전사 조직 구성원 및 협업 실무진'
-            ]
-          },
-          {
-            id: 'in_t_pain',
-            label: '2-2. 타깃이 체감하는 가장 큰 불편함',
-            options: [
-              '복잡하고 진입장벽이 높은 기존 협업 도구',
-              '데이터와 피드백이 한곳에 모이지 않는 파편화 환경',
-              '가시성이 부족한 진척도와 모호한 책임 소재'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'value_and_kpi',
-        title: '가치와 성공 기준',
-        desc: '이 프로젝트가 끝나면 무엇이 좋아지며 성공 여부는 무엇으로 판단하는가?',
-        fields: [
-          {
-            id: 'in_v_change',
-            label: '3-1. 프로젝트 완료 후 기대되는 결정적 변화',
-            options: [
-              '가볍고 유연한 오픈소스 기반 실시간 워크플로우 정착',
-              '주관적 판단을 배제한 객관적 지표 중심의 자동화',
-              '투명한 진척도 공유로 팀 협업 피로도 대폭 감소'
-            ]
-          },
-          {
-            id: 'in_v_criteria',
-            label: '3-2. 성공 여부를 판단하는 핵심 기준(KPI)',
-            options: [
-              '주간 반복 업무 소요 시간 50% 이상 단축',
-              '프로젝트 산출물 문서화 누락률 0% 달성',
-              '목표 마감일 내 MVP 개발 및 실무 배포 완료'
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    stepKey: 'Setup',
-    title: 'Setup',
-    subtitle: '실행 조건을 설계하는 단계',
-    cards: [
-      {
-        id: 'schedule_milestone',
-        title: '일정 및 마일스톤',
-        desc: '최종 마감은 언제이며 반드시 지켜야 할 주요 기점은 어디인가?',
-        fields: [
-          {
-            id: 'su_s_deadline',
-            label: '1-1. 프로젝트 최종 마감일 및 목표 일정',
-            options: [
-              '2주 내 MVP 개발 완료 및 Vercel 실무 배포',
-              '1개월 집중 스프린트 후 정식 런칭',
-              '상시 개선 형태의 애자일 마일스톤 운영'
-            ]
-          },
-          {
-            id: 'su_s_checkpoint',
-            label: '1-2. 반드시 지켜야 할 주요 중간 기점(Milestone)',
-            options: [
-              'D+3일차: 코어 데이터 구조 및 레이아웃 완성',
-              'D+7일차: 핵심 기능 연동 및 내부 테스트 완료',
-              'D+14일차: 최종 검수 및 배포 완료'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'resources_budget',
-        title: '자원 및 예산',
-        desc: '투입할 수 있는 예산, 인력, 장비는 각각 얼마인가?',
-        fields: [
-          {
-            id: 'su_r_budget',
-            label: '2-1. 가용 예산 및 비용 제약 조건',
-            options: [
-              '추가 비용 발생 없는 오픈소스 및 무료 티어 활용',
-              '최소 실비 중심의 합리적 인프라 예산 편성',
-              '별도 유료 솔루션 도입 예산 확보 완료'
-            ]
-          },
-          {
-            id: 'su_r_team',
-            label: '2-2. 투입 가능 인력 및 기술 장비',
-            options: [
-              '1인 풀스택 개발 및 기획 단기 집중 체제',
-              '기획, 개발, 검수 파트별 소규모 협업 인력',
-              '클라우드 기반 협업 장비 및 툴 세팅 완료'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'roles_and_responsibility',
-        title: '역할과 책임 (R&R)',
-        desc: '누가 무엇을 최종 책임지며 의사결정권자는 누구인가?',
-        fields: [
-          {
-            id: 'su_rn_owner',
-            label: '3-1. 최종 책임자(Project Owner) 및 의사결정권자',
-            options: [
-              '1인 메이커가 기획부터 실행까지 전 과정 총괄',
-              '프로젝트 리드(PM)가 최종 승인 및 조율 담당',
-              '이해관계자 합의를 통한 공동 의사결정 체제'
-            ]
-          },
-          {
-            id: 'su_rn_task',
-            label: '3-2. 세부 파트별 실무 담당 분담',
-            options: [
-              '아키텍처 설계 및 프론트엔드 구현 전담',
-              '데이터 구조화 및 콘텐츠 아카이빙 전담',
-              '품질 검수 및 피드백 수렴 전담'
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    stepKey: 'Processing',
-    title: 'Processing',
-    subtitle: '실제 실행 및 모니터링 단계',
-    cards: [
-      {
-        id: 'core_tasks_wbs',
-        title: '핵심 작업 (WBS)',
-        desc: '목표를 달성하기 위해 어떤 순서로 일을 진행할 것인가?',
-        fields: [
-          {
-            id: 'pr_w_order',
-            label: '1-1. 단계별 실행 순서 및 핵심 태스크 정의',
-            options: [
-              '코어 데이터 스키마 정의 ➔ UI 컴포넌트 구현 ➔ 연동 테스트',
-              '요구사항 정의 ➔ 프로토타입 제작 ➔ 피드백 반영 ➔ 배포',
-              '백로그 작성 ➔ 우선순위 선정 ➔ 스프린트 실행'
-            ]
-          },
-          {
-            id: 'pr_w_planb',
-            label: '1-2. 일정 지연 및 이슈 발생 시 대응 플랜 (Plan B)',
-            options: [
-              '핵심 파이프라인 사수를 위해 부가 기능 과감히 홀드',
-              '유저 피드백 즉시 수렴 후 핫픽스 스프린트 즉각 가동',
-              '모듈화 분할 재작업을 통한 복잡도 분산 처리'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'quality_criteria',
-        title: '품질 및 완료 기준',
-        desc: '결과물이 제대로 나왔는지 무엇을 기준으로 검수할 것인가?',
-        fields: [
-          {
-            id: 'pr_q_check',
-            label: '2-1. 결과물 검수 및 품질 통과 기준',
-            options: [
-              '모든 세부 입력 항목 정합성 100% 충족 여부',
-              '초기 설정한 정량적 KPI 지표 달성 가능성 확인',
-              '실무 환경에서 에러 없이 원활히 구동되는지 테스트'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'communication_change',
-        title: '소통 및 변경 관리',
-        desc: '진행 상황은 어떻게 공유하고 스펙 바뀔 때 대응할 것인가?',
-        fields: [
-          {
-            id: 'pr_c_sync',
-            label: '3-1. 진행 상황 공유 및 싱크 주간 루틴',
-            options: [
-              '깃허브 커밋 및 칸반 보드를 통한 실시간 진척도 공유',
-              '주간 단위 회고 및 스프린트 싱크 미팅 진행',
-              '이슈 발생 즉시 슬랙/메신저 채널을 통한 실시간 알림'
-            ]
-          },
-          {
-            id: 'pr_c_shift',
-            label: '3-2. 요구사항 및 스펙 변경 시 대응 프로세스',
-            options: [
-              '변경 사유 타당성 검토 후 백로그 우선순위 재조정',
-              '프로젝트 마감일에 미치는 영향도 분석 후 승인',
-              '긴급 스펙 변경 시 별도 브랜치 분리 후 독립 처리'
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    stepKey: 'Review',
-    title: 'Review',
-    subtitle: '결과를 검증하고 되돌아보는 단계',
-    cards: [
-      {
-        id: 'requirement_check',
-        title: '요구사항 충족 여부',
-        desc: '처음 기획했던 핵심 목적과 필수 조건들이 제대로 반영되었는가?',
-        fields: [
-          {
-            id: 're_req_match',
-            label: '1-1. 초기 Input 목적 및 필수 조건 반영도 검증',
-            options: [
-              '초기 기획한 모든 핵심 Pain Point 해결 여부 검토 완료',
-              '타깃 오디언스 니즈가 실제 산출물에 완벽히 녹아들었는지 확인',
-              '필수 요구사항 대비 누락되거나 변질된 항목 점검'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'performance_evaluation',
-        title: '성과 평가',
-        desc: '정량적·정성적 목표 대비 실제 결과는 어떠한가?',
-        fields: [
-          {
-            id: 're_pe_score',
-            label: '2-1. 정량적·정성적 목표 달성도 평가',
-            options: [
-              '목표한 KPI 수치(시간 단축, 문서화 등) 초과 달성',
-              '기대했던 정성적 만족도 및 업무 피로도 개선 효과 확인',
-              '예상치 못한 병목 구간 발생으로 인한 성과 일부 조정'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'kpt_retrospective',
-        title: 'KPT 회고 (Keep / Problem / Try)',
-        desc: '이번에 유지할 점과 겪은 문제, 다음 시도할 점은 무엇인가?',
-        fields: [
-          {
-            id: 're_kpt_content',
-            label: '3-1. KPT 관점의 종합 회고 내용 도출',
-            options: [
-              'Keep: 효율적인 자동화 프로세스와 명확한 문서화 체계 유지',
-              'Problem: 초기 일정 산정의 빠듯함과 예외 케이스 처리 지연',
-              'Try: 다음 프로젝트에서는 더 유연한 마일스톤 및 자동 동기화 도입'
-            ]
-          }
-        ]
-      }
-    ]
-  },
-  {
-    stepKey: 'Output',
-    title: 'Output',
-    subtitle: '프로젝트 완료 및 관리하는 단계',
-    cards: [
-      {
-        id: 'final_delivery',
-        title: '최종 산출물 전달',
-        desc: '결과물을 어떤 포맷으로 누구에게 전달하고 완료를 확인할 것인가?',
-        fields: [
-          {
-            id: 'ou_f_format',
-            label: '1-1. 최종 산출물 포맷 및 전달 대상',
-            options: [
-              'PASS 5 마스터 스펙 정의서 웹 어플리케이션 최종 렌더링 및 배포',
-              '깃허브 소스 코드 및 노션 공식 매뉴얼 문서 인계',
-              '이해관계자 대상 결과 보고서 및 아카이빙 링크 공유'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'project_closing',
-        title: '프로젝트 클로징',
-        desc: '최종 승인과 정산 등 마무리 절차는 어떻게 끝낼 것인가?',
-        fields: [
-          {
-            id: 'ou_cl_signoff',
-            label: '2-1. 최종 승인(Sign-off) 및 클로징 절차',
-            options: [
-              '프로젝트 오너 최종 검수 승인 후 공식 종료 선언',
-              '사용된 리소스 및 잔여 예산 최종 정산 마무리',
-              '칸반 보드 및 백로그 최종 상태 업데이트 후 락(Lock) 처리'
-            ]
-          }
-        ]
-      },
-      {
-        id: 'knowledge_asset',
-        title: '경험 및 지식 아카이빙',
-        desc: '다음 프로젝트에서 재사용할 기록과 지식을 남기는 단계',
-        fields: [
-          {
-            id: 'ou_k_archive',
-            label: '3-1. 향후 재사용을 위한 아카이빙 및 템플릿화',
-            options: [
-              '성공적인 워크플로우 템플릿 및 커스텀 옵션 영구 라이브러리화',
-              '이번 프로젝트의 트러블슈팅 노하우 문서화 및 공유',
-              '다음 스프린트에 곧바로 적용 가능한 베스트 프랙티스 저장'
-            ]
-          }
-        ]
-      }
-    ]
-  }
-];
-
-const dict: Record<LangMode, DictType> = {
-  KO: {
-    workspace: 'PASS 5 WORKSPACE',
-    projects: 'Projects',
-    focusViews: 'Focus Views',
-    addProjectBtn: '+ 추가',
-    projPlaceholder: '새 프로젝트 이름...',
-    kanbanView: '📋 전체 칸반 뷰',
-    reportView: '📑 종합 정의서',
-    kanbanGuide: '카드를 드래그하여 단계를 재배치하거나, 의사결정 중심의 질문형 카드를 자유롭게 관리하세요.',
-    completed100: '100% 완료됨',
-    inProgress: '진행 중 / 미완료',
-    focusGo: '집중뷰 ↗',
-    editName: '✏️ 이름 수정',
-    addCard: '+ 새 카드 추가',
-    back: '◀ 뒤로 가기',
-    focusModeTitle: 'PASS 5 Focus Mode',
-    detailEdit: '개별 수정하기 →',
-    progress: '진행도:',
-    formStatus: '세부 점검 항목별 입력 현황',
-    notEntered: '아직 입력되지 않았습니다.',
-    prevCard: '◀ 이전 카드',
-    nextCard: '다음 카드 ▶',
-    firstCard: '첫 카드',
-    lastCard: '마지막 카드',
-    selectAll: '전체 선택 ✓',
-    deselectAll: '전체 해제 ✕',
-    printPdf: '🖨️ 정의서 인쇄 / PDF 저장',
-    lightMode: '☀️ 라이트 모드',
-    darkMode: '🌙 다크 모드',
-    langToggle: '🌐 ENG',
-  },
-  EN: {
-    workspace: 'PASS 5 WORKSPACE',
-    projects: 'Projects',
-    focusViews: 'Focus Views',
-    addProjectBtn: '+ Add',
-    projPlaceholder: 'New project name...',
-    kanbanView: '📋 Kanban Board',
-    reportView: '📑 Master Report',
-    kanbanGuide: 'Drag cards to rearrange steps, or freely manage decision-centric question cards.',
-    completed100: '100% Completed',
-    inProgress: 'In Progress / Pending',
-    focusGo: 'Focus ↗',
-    editName: '✏️ Edit Name',
-    addCard: '+ Add Card',
-    back: '◀ Back',
-    focusModeTitle: 'PASS 5 Focus Mode',
-    detailEdit: 'Edit Details →',
-    progress: 'Progress:',
-    formStatus: 'Field Input Status',
-    notEntered: 'Not entered yet.',
-    prevCard: '◀ Prev Card',
-    nextCard: 'Next Card ▶',
-    firstCard: 'First Card',
-    lastCard: 'Last Card',
-    selectAll: 'Select All ✓',
-    deselectAll: 'Deselect All ✕',
-    printPdf: '🖨️ Print / Save PDF',
-    lightMode: '☀️ Light Mode',
-    darkMode: '🌙 Dark Mode',
-    langToggle: '🌐 KOR',
-  }
-};
+import { ViewMode, LangMode, Folder } from '../lib/types';
+import { supabase } from '../lib/supabase/client';
+import { initialFrameworkData } from '../lib/framework';
+import { dict } from '../lib/i18n';
+import { useProjectData } from '../lib/hooks/useProjectData';
+import { useFolderData } from '../lib/hooks/useFolderData';
+import { useCardData } from '../lib/hooks/useCardData';
+import { useFieldInteraction } from '../lib/hooks/useFieldInteraction';
+import FolderIndexView from './components/FolderIndexView';
 
 export default function Pass5MasterApp() {
   const [user, setUser] = useState<any>(null);
@@ -460,86 +37,23 @@ export default function Pass5MasterApp() {
     setIsMounted(true);
   }, []);
 
-  const loadProjects = async (userId: string) => {
-    setIsProjectsLoading(true);
-
-    console.log('Loading projects for user:', userId);
-
-    // 프로젝트만 먼저 가져오기
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name, created_by, created_at')
-      .order('created_at', { ascending: true });
-
-    if (error) {
-      console.error('프로젝트 불러오기 실패:', error);
-      alert(`프로젝트를 불러오지 못했습니다.\n${error.message}`);
-      setProjects([]);
-      setActiveProjectId(null);
-      setIsProjectsLoading(false);
-      return;
-    }
-
-    const loadedProjects = (data || []) as Project[];
-    console.log('Loaded projects:', loadedProjects);
-    
-    // 각 프로젝트에 대한 사용자 권한 확인 (이제 RLS 정책으로 자신의 멤버십 확인 가능)
-    const projectsWithRoles = await Promise.all(
-      loadedProjects.map(async (project) => {
-        console.log('Checking role for project:', project.id, 'user:', userId);
-        const { data: memberData, error: memberError } = await supabase
-          .from('project_members')
-          .select('role')
-          .eq('project_id', project.id)
-          .eq('user_id', userId)
-          .maybeSingle(); // single 대신 maybeSingle 사용
-        
-        console.log('Member data for project', project.id, ':', memberData, 'error:', memberError);
-        
-        return {
-          ...project,
-          userRole: memberData?.role || null
-        };
-      })
-    );
-
-    console.log('Projects with roles:', projectsWithRoles);
-    setProjects(projectsWithRoles);
-
-    // Initialize frameworkData for any new projects
-    setFrameworkDataPerProject(prev => {
-      const updated = { ...prev };
-      projectsWithRoles.forEach(project => {
-        if (!updated[project.id]) {
-          updated[project.id] = JSON.parse(JSON.stringify(initialFrameworkData));
-        }
-      });
-      return updated;
-    });
-
-    if (projectsWithRoles.length > 0) {
-      setActiveProjectId(prev =>
-        prev && projectsWithRoles.some(project => project.id === prev)
-          ? prev
-          : projectsWithRoles[0].id
-      );
-    } else {
-      setActiveProjectId(null);
-    }
-
-    setIsProjectsLoading(false);
-  };
-
   const loadProjectMembers = async (projectId: string) => {
     try {
       // 현재 세션 토큰 가져오기
       const { data: { session } } = await supabase.auth.getSession();
       const token = session?.access_token;
 
+      // 토큰이 없으면 인증 자체가 불가능하므로 중단 (Bearer undefined 방지)
+      if (!token) {
+        console.error('No access token available; cannot load project members.');
+        return;
+      }
+
       console.log('Loading project members for:', projectId);
       console.log('Current user ID:', user?.id);
 
       const response = await fetch(`/api/members?projectId=${projectId}`, {
+        credentials: 'include', // 쿠키(인증 세션)가 서버로 전달되도록 설정
         headers: {
           'Authorization': `Bearer ${token}`,
         }
@@ -564,52 +78,6 @@ export default function Pass5MasterApp() {
     }
   };
 
-  const loadCardsForProject = async (projectId: string) => {
-    try {
-      const dbCards = await fetchCardsByProject(projectId);
-      
-      // Convert DB cards to frameworkData format
-      // Keep default cards and append user-created cards
-      const frameworkDataFromDB: typeof initialFrameworkData = initialFrameworkData.map(step => {
-        const stepDbCards = dbCards
-          .filter(card => card.step_key === step.stepKey)
-          .map(dbCard => ({
-            id: dbCard.card_id,
-            title: dbCard.title,
-            desc: dbCard.description,
-            fields: dbCard.fields
-          }));
-
-        // Get default card IDs for this step
-        const defaultCardIds = step.cards.map(c => c.id);
-        
-        // Filter out DB cards that are default cards (they will be kept from initialFrameworkData)
-        const userCreatedCards = stepDbCards.filter(dbCard => 
-          !defaultCardIds.includes(dbCard.id)
-        );
-
-        // Keep default cards and append user-created cards
-        return {
-          ...step,
-          cards: [...step.cards, ...userCreatedCards]
-        };
-      });
-
-      // Update frameworkData with DB data
-      setFrameworkData(frameworkDataFromDB);
-      
-      // Store in frameworkDataPerProject for local state management
-      setFrameworkDataPerProject(prev => ({
-        ...prev,
-        [projectId]: frameworkDataFromDB
-      }));
-    } catch (error) {
-      console.error('Failed to load cards for project:', error);
-      // Fallback to initial framework data if DB load fails
-      setFrameworkData(initialFrameworkData);
-    }
-  };
-
   const handleGoogleLogin = async () => {
     await supabase.auth.signInWithOAuth({
       provider: 'google',
@@ -630,9 +98,7 @@ export default function Pass5MasterApp() {
 
 
   const [isFolderOpen, setIsFolderOpen] = useState(true);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [activeProjectId, setActiveProjectId] = useState<string | null>(null);
-  const [isProjectsLoading, setIsProjectsLoading] = useState(true);
+  const [activeFolderId, setActiveFolderId] = useState<string | null>(null);
   const [projectMembers, setProjectMembers] = useState<any[]>([]); // 프로젝트 멤버 정보
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null); // 현재 사용자 권한
   
@@ -645,15 +111,88 @@ export default function Pass5MasterApp() {
   const [headerEditingProjId, setHeaderEditingProjId] = useState<string | null>(null);
   const [headerTempName, setHeaderTempName] = useState('');
 
+  // Enter/blur 이벤트 중복 방지용 ref
+  // - EnterCommitRef: Enter로 커밋된 뒤 따라오는 blur가 같은 커밋을 재수행하지 못하도록 소비 플래그
+  const headerEnterCommitRef = useRef(false);       // 헤더 입력 Enter 커밋 소비 플래그
+
   // 초대 모달 상태
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member'); // admin, member, viewer
 
-  const [frameworkDataPerProject, setFrameworkDataPerProject] = useState<Record<string, typeof initialFrameworkData>>({});
-  const [frameworkData, setFrameworkData] = useState(initialFrameworkData);
+  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
+  const [focusStepKey, setFocusStepKey] = useState<string>('Input');
+  const [activeCardId, setActiveCardId] = useState<string>('purpose_and_problem');
+  const [historyStack, setHistoryStack] = useState<{ mode: ViewMode; stepKey?: string; cardId?: string; folderId?: string }[]>([]);
 
-  // 모든 상태 정의 후 useEffect 훅 배치
+  const navigateTo = (newMode: ViewMode, options?: { stepKey?: string; cardId?: string; folderId?: string }) => {
+    setHistoryStack(prev => [...prev, { mode: viewMode, stepKey: focusStepKey, cardId: activeCardId, folderId: activeFolderId ?? undefined }]);
+    setViewMode(newMode);
+    if (options?.stepKey) setFocusStepKey(options.stepKey);
+    if (options?.cardId) setActiveCardId(options.cardId);
+    if (options?.folderId !== undefined) setActiveFolderId(options.folderId);
+  };
+
+  const handleGoBack = () => {
+    if (historyStack.length === 0) {
+      setViewMode('kanban');
+      setActiveFolderId(null);
+      return;
+    }
+    const lastState = historyStack[historyStack.length - 1];
+    setHistoryStack(prev => prev.slice(0, prev.length - 1));
+    setViewMode(lastState.mode);
+    if (lastState.stepKey) setFocusStepKey(lastState.stepKey);
+    if (lastState.cardId) setActiveCardId(lastState.cardId);
+    setActiveFolderId(lastState.folderId ?? null);
+  };
+
+  const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
+  const [frameworkDataPerProject, setFrameworkDataPerProject] = useState<Record<string, typeof initialFrameworkData>>({});
+
+  // 권한 확인 헬퍼 함수
+  const canEdit = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'member';
+  const canInvite = currentUserRole === 'owner' || currentUserRole === 'admin';
+  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
+
+  // 프로젝트 데이터(projects/activeProjectId)와 CRUD/이름 수정/드래그 재정렬 로직을 커스텀 훅으로 분리
+  const {
+    projects,
+    setProjects,
+    activeProjectId,
+    setActiveProjectId,
+    isProjectsLoading,
+    setIsProjectsLoading,
+    draggedProjectId,
+    setDraggedProjectId,
+    loadProjects,
+    handleAddProject,
+    handleDuplicateProject,
+    handleDeleteProject,
+    handleCommitSidebarProjectName,
+    handleCommitHeaderProjectName,
+    handleProjectDragStart,
+    handleProjectDrop,
+  } = useProjectData({
+    canEdit,
+    formData,
+    setFormData,
+    frameworkDataPerProject,
+    setFrameworkDataPerProject,
+    newProjName,
+    setNewProjName,
+    setIsAddingProject,
+    sidebarEditingProjId,
+    setSidebarEditingProjId,
+    sidebarTempName,
+    setSidebarTempName,
+    headerEditingProjId,
+    setHeaderEditingProjId,
+    headerTempName,
+    setHeaderTempName,
+  });
+
+  // 로그인/프로젝트·카드 데이터 로딩 훅 (프로젝트 데이터 훅의 반환값 사용)
   useEffect(() => {
     if (!user) {
       setProjects([]);
@@ -667,818 +206,143 @@ export default function Pass5MasterApp() {
   useEffect(() => {
     if (activeProjectId && user) {
       loadProjectMembers(activeProjectId);
-      
+
       // Load cards from DB for the active project
       loadCardsForProject(activeProjectId);
     }
   }, [activeProjectId, user]);
 
-  const [editingCardId, setEditingCardId] = useState<string | null>(null);
-  const [tempCardTitle, setTempCardTitle] = useState('');
-  const [tempCardDesc, setTempCardDesc] = useState('');
+  // 폴더 데이터(폴더 CRUD/펼치기/드래그 배정) 로직을 커스텀 훅으로 분리
+  const {
+    folders,
+    expandedFolderIds,
+    isAddingFolder,
+    setIsAddingFolder,
+    newFolderName,
+    setNewFolderName,
+    addingChildToFolderId,
+    setAddingChildToFolderId,
+    editingFolderId,
+    setEditingFolderId,
+    folderTempName,
+    setFolderTempName,
+    handleToggleFolderExpanded,
+    openFolder,
+    handleAddFolder,
+    handleRenameFolder,
+    handleDeleteFolder,
+    handleDropOnFolder,
+  } = useFolderData({
+    user,
+    activeFolderId,
+    setActiveFolderId,
+    navigateTo,
+    setViewMode,
+    projects,
+    setProjects,
+    draggedProjectId,
+    setDraggedProjectId,
+  });
 
-  const [editingStepMetaKey, setEditingStepMetaKey] = useState<string | null>(null);
-  const [tempStepTitle, setTempStepTitle] = useState('');
-  const [tempStepSubtitle, setTempStepSubtitle] = useState('');
-
-  const [addingCardStepKey, setAddingCardStepKey] = useState<string | null>(null);
-  const [newCardTitle, setNewCardTitle] = useState('');
-  const [newCardDesc, setNewCardDesc] = useState('');
-  const [newCardFields, setNewCardFields] = useState<{ label: string; optionsStr: string }[]>([
-    { label: '1-1. 세부 항목 질문 입력', optionsStr: '옵션 1, 옵션 2, 옵션 3' }
-  ]);
-
-  const [editingFieldCardId, setEditingFieldCardId] = useState<string | null>(null);
-  const [newFieldLabel, setNewFieldLabel] = useState('');
-  const [newFieldOptionsStr, setNewFieldOptionsStr] = useState('');
-
-  const [editingFieldId, setEditingFieldId] = useState<string | null>(null);
-  const [tempFieldLabel, setTempFieldLabel] = useState('');
-
-  const [isPickerOpen, setIsPickerOpen] = useState(false);
-  const [pickerStepKey, setPickerStepKey] = useState<string>('Input');
-  const [pickerCardId, setPickerCardId] = useState<string>('');
-  const [selectedPickedOptions, setSelectedPickedOptions] = useState<string[]>([]);
-  const [pickerSearchQuery, setPickerSearchQuery] = useState<string>('');
-  const [pickerTargetType, setPickerTargetType] = useState<'newField' | 'newCardField' | 'existingField'>('newField');
-  const [pickerTargetFieldIndex, setPickerTargetFieldIndex] = useState<number | null>(null);
-  const [pickerTargetFieldId, setPickerTargetFieldId] = useState<string | null>(null);
-
-  const [draggedCardId, setDraggedCardId] = useState<string | null>(null);
-  const [draggedProjectId, setDraggedProjectId] = useState<string | null>(null);
-
-  const [viewMode, setViewMode] = useState<ViewMode>('kanban');
-  const [focusStepKey, setFocusStepKey] = useState<string>('Input');
-  const [activeCardId, setActiveCardId] = useState<string>('purpose_and_problem');
-  const [historyStack, setHistoryStack] = useState<{ mode: ViewMode; stepKey?: string; cardId?: string }[]>([]);
-
-  const navigateTo = (newMode: ViewMode, options?: { stepKey?: string; cardId?: string }) => {
-    setHistoryStack(prev => [...prev, { mode: viewMode, stepKey: focusStepKey, cardId: activeCardId }]);
-    setViewMode(newMode);
-    if (options?.stepKey) setFocusStepKey(options.stepKey);
-    if (options?.cardId) setActiveCardId(options.cardId);
-  };
-
-  const handleGoBack = () => {
-    if (historyStack.length === 0) {
-      setViewMode('kanban');
-      return;
-    }
-    const lastState = historyStack[historyStack.length - 1];
-    setHistoryStack(prev => prev.slice(0, prev.length - 1));
-    setViewMode(lastState.mode);
-    if (lastState.stepKey) setFocusStepKey(lastState.stepKey);
-    if (lastState.cardId) setActiveCardId(lastState.cardId);
-  };
-
-  const [customOptions, setCustomOptions] = useState<Record<string, string[]>>({});
-  const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
-  const [fieldModes, setFieldModes] = useState<Record<string, 'SELECT' | 'CUSTOM' | 'EDIT'>>({});
-  const [customInputs, setCustomInputs] = useState<Record<string, string>>({});
-  const [savePermanently, setSavePermanently] = useState<Record<string, boolean>>({});
+  // 카드/프레임워크 데이터 상태와 CRUD/필드 관리 로직을 커스텀 훅으로 분리
+  const {
+    frameworkData,
+    editingCardId,
+    setEditingCardId,
+    tempCardTitle,
+    setTempCardTitle,
+    tempCardDesc,
+    setTempCardDesc,
+    editingStepMetaKey,
+    setEditingStepMetaKey,
+    tempStepTitle,
+    setTempStepTitle,
+    tempStepSubtitle,
+    setTempStepSubtitle,
+    addingCardStepKey,
+    setAddingCardStepKey,
+    newCardTitle,
+    setNewCardTitle,
+    newCardDesc,
+    setNewCardDesc,
+    newCardFields,
+    setNewCardFields,
+    editingFieldCardId,
+    setEditingFieldCardId,
+    newFieldLabel,
+    setNewFieldLabel,
+    newFieldOptionsStr,
+    setNewFieldOptionsStr,
+    editingFieldId,
+    setEditingFieldId,
+    tempFieldLabel,
+    setTempFieldLabel,
+    loadCardsForProject,
+    handleCreateCard,
+    handleCommitStepMeta,
+    handleCardDragStart,
+    handleCardDragOver,
+    handleCardDrop,
+    handleAddFieldToCard,
+    handleDeleteFieldFromCard,
+    handleUpdateFieldLabel,
+    handleFieldDragStart,
+    handleFieldDrop,
+    allFlattenedCards,
+    handleDeleteCard,
+    handleSaveCardMeta,
+  } = useCardData({
+    activeProjectId,
+    setActiveProjectId,
+    setViewMode,
+    formData,
+    setFormData,
+    frameworkDataPerProject,
+    setFrameworkDataPerProject,
+    activeCardId,
+    setActiveCardId,
+  });
 
   const activeProject = projects.find(p => p.id === activeProjectId);
   const projectKey = activeProjectId ?? '';
 
-  // Helper function to update frameworkData for the current project
-  const updateFrameworkData = (updater: (prev: typeof initialFrameworkData) => typeof initialFrameworkData) => {
-    setFrameworkData(updater);
-    if (activeProjectId) {
-      setFrameworkDataPerProject(prev => ({
-        ...prev,
-        [activeProjectId]: updater(prev[activeProjectId] || initialFrameworkData)
-      }));
-    }
-  };
-
-  // 권한 확인 헬퍼 함수
-  const canEdit = currentUserRole === 'owner' || currentUserRole === 'admin' || currentUserRole === 'member';
-  const canInvite = currentUserRole === 'owner' || currentUserRole === 'admin';
-  const canManageMembers = currentUserRole === 'owner' || currentUserRole === 'admin';
-
-  const getFieldOptions = (field: any, cardId: string) => {
-    const added = customOptions[field.id] || [];
-    const projStore = formData[projectKey] || {};
-    const cardStore = projStore[cardId] || {};
-    const currentVal = cardStore[field.id];
-
-    let baseOptions = [...field.options, ...added];
-    if (currentVal && !baseOptions.includes(currentVal)) {
-      baseOptions = [currentVal, ...baseOptions];
-    }
-    return baseOptions;
-  };
-
-  const handleSelectChange = (fieldId: string, val: string, cardId: string) => {
-    if (val === 'CUSTOM_MODE') {
-      const projStore = formData[projectKey] || {};
-      const cardStore = projStore[cardId] || {};
-      const currentVal = cardStore[fieldId] || '';
-      
-      setFieldModes(prev => ({ ...prev, [fieldId]: 'CUSTOM' }));
-      setCustomInputs(prev => ({ ...prev, [fieldId]: currentVal }));
-    } else if (val === '') {
-      handleResetFieldValue(cardId, fieldId);
-    } else {
-      setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
-      updateFormValue(cardId, fieldId, val);
-    }
-  };
-
-  const handleStartEditOption = (fieldId: string, currentVal: string) => {
-    setFieldModes(prev => ({ ...prev, [fieldId]: 'EDIT' }));
-    setCustomInputs(prev => ({ ...prev, [fieldId]: currentVal }));
-  };
-
-  const handleCustomSubmit = (cardId: string, fieldId: string, isEdit: boolean = false) => {
-    const text = customInputs[fieldId]?.trim();
-    if (!text) return;
-    updateFormValue(cardId, fieldId, text);
-
-    if (savePermanently[fieldId]) {
-      const currentAdded = customOptions[fieldId] || [];
-      if (!currentAdded.includes(text)) {
-        setCustomOptions(prev => ({
-          ...prev,
-          [fieldId]: [...currentAdded, text]
-        }));
-      }
-    }
-
-    setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
-    setCustomInputs(prev => ({ ...prev, [fieldId]: '' }));
-  };
-
-  const handleResetFieldValue = (cardId: string, fieldId: string) => {
-    const projStore = formData[projectKey] || {};
-    const cardStore = projStore[cardId] || {};
-    const newCardStore = { ...cardStore };
-    delete newCardStore[fieldId];
-
-    setFormData(prev => ({
-      ...prev,
-      [projectKey]: {
-        ...projStore,
-        [cardId]: newCardStore
-      }
-    }));
-    setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
-  };
-
-  const updateFormValue = (cardId: string, fieldId: string, value: string) => {
-    const projStore = formData[projectKey] || {};
-    const cardStore = projStore[cardId] || {};
-    setFormData(prev => ({
-      ...prev,
-      [projectKey]: {
-        ...projStore,
-        [cardId]: {
-          ...cardStore,
-          [fieldId]: value
-        }
-      }
-    }));
-  };
-
-  const getCardProgress = (card: any) => {
-    if (!card || !card.fields) return 0;
-    const projStore = formData[projectKey] || {};
-    const cardStore = projStore[card.id] || {};
-    const totalFields = card.fields.length;
-    if (totalFields === 0) return 0;
-    let filledCount = 0;
-    card.fields.forEach((f: any) => {
-      if (cardStore[f.id] && cardStore[f.id].trim() !== '') {
-        filledCount++;
-      }
-    });
-    return Math.round((filledCount / totalFields) * 100);
-  };
-
-  const handleAddProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-
-    const projectName = newProjName.trim();
-    if (!projectName) return;
-
-    const { data: { user: currentUser }, error: userError } = await supabase.auth.getUser();
-
-    if (userError || !currentUser) {
-      alert(`로그인 정보를 확인하지 못했습니다.\n${userError?.message || '로그인이 필요합니다.'}`);
-      return;
-    }
-
-    const { data: projectData, error: insertError } = await supabase
-      .from('projects')
-      .insert({
-        name: projectName,
-        created_by: currentUser.id,
-      })
-      .select('id')
-      .single();
-
-    if (insertError) {
-      alert(`프로젝트를 만들지 못했습니다.\n${insertError.message}`);
-      return;
-    }
-
-    // Add creator as owner to project_members
-    if (projectData?.id) {
-      const { error: memberError } = await supabase
-        .from('project_members')
-        .insert({
-          project_id: projectData.id,
-          user_id: currentUser.id,
-          role: 'owner'
-        });
-
-      if (memberError) {
-        console.error('Failed to add owner to project_members:', memberError);
-        // Don't alert immediately - this might be a temporary RLS issue
-        // The project was created successfully, let the user continue
-        console.warn('Project created but owner assignment failed. User may need to be added manually via admin.');
-      }
-    }
-
-    setNewProjName('');
-    setIsAddingProject(false);
-    await loadProjects(currentUser.id);
-  };
-
-  const handleEditProject = async (projId: string, newName: string) => {
-    if (!canEdit) {
-      alert('편집 권한이 없습니다.');
-      return;
-    }
-
-    const { error } = await supabase
-      .from('projects')
-      .update({ name: newName })
-      .eq('id', projId);
-
-    if (error) {
-      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
-      return;
-    }
-
-    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: newName } : p));
-  };
-
-  const handleDuplicateProject = async (proj: Project) => {
-    const { data: { user: currentUser } } = await supabase.auth.getUser();
-    if (!currentUser) return;
-
-    const newName = `${proj.name} (복제됨)`;
-
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({
-        name: newName,
-        created_by: currentUser.id,
-      })
-      .select('id, name, created_by, created_at')
-      .single();
-
-    if (error) {
-      alert(`프로젝트를 복제하지 못했습니다.\n${error.message}`);
-      return;
-    }
-
-    const newProject = data as Project;
-    const targetFormData = formData[proj.id] || {};
-    const targetFrameworkData = frameworkDataPerProject[proj.id] || initialFrameworkData;
-
-    // Add creator as owner to project_members for the duplicated project
-    const { error: memberError } = await supabase
-      .from('project_members')
-      .insert({
-        project_id: newProject.id,
-        user_id: currentUser.id,
-        role: 'owner'
-      });
-
-    if (memberError) {
-      console.error('Failed to add owner to project_members for duplicated project:', memberError);
-      // Don't alert immediately - this might be a temporary RLS issue
-      console.warn('Project duplicated but owner assignment failed. User may need to be added manually via admin.');
-    }
-
-    // Duplicate cards in database
-    const duplicateSuccess = await duplicateCardsForProject(proj.id, newProject.id);
-    if (!duplicateSuccess) {
-      alert(`카드 복제에 실패했습니다. 프로젝트는 생성되었으나 카드 데이터가 없을 수 있습니다.`);
-    }
-
-    setFormData(prev => ({
-      ...prev,
-      [newProject.id]: JSON.parse(JSON.stringify(targetFormData))
-    }));
-
-    setFrameworkDataPerProject(prev => ({
-      ...prev,
-      [newProject.id]: JSON.parse(JSON.stringify(targetFrameworkData))
-    }));
-
-    setProjects(prev => [...prev, newProject]);
-    setActiveProjectId(newProject.id);
-  };
-
-  const handleDeleteProject = async (projId: string) => {
-    if (projects.length <= 1) {
-      alert('마지막 프로젝트는 삭제할 수 없습니다.');
-      return;
-    }
-
-    // Delete all cards for this project from database
-    await deleteAllCardsByProject(projId);
-
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projId);
-
-    if (error) {
-      alert(`프로젝트를 삭제하지 못했습니다.\n${error.message}`);
-      return;
-    }
-
-    const filtered = projects.filter(p => p.id !== projId);
-    setProjects(filtered);
-
-    // Clean up formData and frameworkDataPerProject for deleted project
-    setFormData(prev => {
-      const updated = { ...prev };
-      delete updated[projId];
-      return updated;
-    });
-
-    setFrameworkDataPerProject(prev => {
-      const updated = { ...prev };
-      delete updated[projId];
-      return updated;
-    });
-
-    if (activeProjectId === projId) {
-      setActiveProjectId(filtered[0]?.id ?? null);
-    }
-  };
-
-  const handleCommitSidebarProjectName = async (projId: string) => {
-    const projectName = sidebarTempName.trim();
-    if (!projectName) {
-      setSidebarEditingProjId(null);
-      return;
-    }
-
-    // 권한 체크
-    const project = projects.find(p => p.id === projId);
-    if (!canEdit || (project?.userRole !== 'owner' && project?.userRole !== 'admin')) {
-      alert('프로젝트 이름을 수정할 권한이 없습니다.');
-      setSidebarEditingProjId(null);
-      return;
-    }
-
-    const { error } = await supabase
-      .from('projects')
-      .update({ name: projectName })
-      .eq('id', projId);
-
-    if (error) {
-      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
-      setSidebarEditingProjId(null);
-      return;
-    }
-
-    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: projectName } : p));
-    setSidebarEditingProjId(null);
-  };
-
-  const handleCommitHeaderProjectName = async (projId: string) => {
-    const projectName = headerTempName.trim();
-    if (!projectName) {
-      setHeaderEditingProjId(null);
-      return;
-    }
-
-    // 권한 체크
-    const project = projects.find(p => p.id === projId);
-    if (!canEdit || (project?.userRole !== 'owner' && project?.userRole !== 'admin')) {
-      alert('프로젝트 이름을 수정할 권한이 없습니다.');
-      setHeaderEditingProjId(null);
-      return;
-    }
-
-    const { error } = await supabase
-      .from('projects')
-      .update({ name: projectName })
-      .eq('id', projId);
-
-    if (error) {
-      alert(`프로젝트 이름을 수정하지 못했습니다.\n${error.message}`);
-      setHeaderEditingProjId(null);
-      return;
-    }
-
-    setProjects(prev => prev.map(p => p.id === projId ? { ...p, name: projectName } : p));
-    setHeaderEditingProjId(null);
-  };
-
-
-  const handleCommitStepMeta = (stepKey: string) => {
-    updateFrameworkData(prev => prev.map(step => {
-      if (step.stepKey === stepKey) {
-        return {
-          ...step,
-          title: tempStepTitle.trim() || step.title,
-          subtitle: tempStepSubtitle.trim() || step.subtitle
-        };
-      }
-      return step;
-    }));
-    setEditingStepMetaKey(null);
-  };
-
-  const handleProjectDragStart = (e: React.DragEvent, projId: string) => {
-    setDraggedProjectId(projId);
-    e.dataTransfer.setData('text/plain', `proj_${projId}`);
-  };
-
-  const handleProjectDrop = (e: React.DragEvent, targetProjId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (draggedProjectId === null || draggedProjectId === targetProjId) return;
-
-    const projList = [...projects];
-    const draggedIdx = projList.findIndex(p => p.id === draggedProjectId);
-    const targetIdx = projList.findIndex(p => p.id === targetProjId);
-
-    if (draggedIdx !== -1 && targetIdx !== -1) {
-      const [moved] = projList.splice(draggedIdx, 1);
-      projList.splice(targetIdx, 0, moved);
-      setProjects(projList);
-    }
-    setDraggedProjectId(null);
-  };
-
-  const handleDragStart = (e: React.DragEvent, cardId: string) => {
-    setDraggedCardId(cardId);
-    e.dataTransfer.setData('text/plain', cardId);
-  };
-
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = async (e: React.DragEvent, targetStepKey: string, targetCardId?: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    if (!draggedCardId || !activeProjectId) return;
-
-    // Find the card being moved
-    let movedCard: any = null;
-    let sourceStepKey: string | null = null;
-
-    frameworkData.forEach(step => {
-      const foundCard = step.cards.find(c => c.id === draggedCardId);
-      if (foundCard) {
-        movedCard = foundCard;
-        sourceStepKey = step.stepKey;
-      }
-    });
-
-    if (!movedCard) return;
-
-    // Update local state first
-    updateFrameworkData(prevFramework => {
-      let movedCardLocal: any = null;
-
-      const cleanedFramework = prevFramework.map(step => {
-        const filteredCards = step.cards.filter(c => {
-          if (c.id === draggedCardId) {
-            movedCardLocal = c;
-            return false;
-          }
-          return true;
-        });
-        return { ...step, cards: filteredCards };
-      });
-
-      if (!movedCardLocal) return prevFramework;
-
-      return cleanedFramework.map(step => {
-        if (step.stepKey === targetStepKey) {
-          const newCards = [...step.cards];
-          if (targetCardId) {
-            const targetIdx = newCards.findIndex(c => c.id === targetCardId);
-            if (targetIdx !== -1) {
-              newCards.splice(targetIdx, 0, movedCardLocal);
-            } else {
-              newCards.push(movedCardLocal);
-            }
-          } else {
-            newCards.push(movedCardLocal);
-          }
-          return { ...step, cards: newCards };
-        }
-        return step;
-      });
-    });
-
-    // Update database
-    if (sourceStepKey !== targetStepKey) {
-      // Card moved to different step - update step_key in DB
-      await updateCardStep(draggedCardId, activeProjectId, targetStepKey);
-    }
-    // If moved within same step, position update would be handled here (omitted for simplicity)
-
-    setDraggedCardId(null);
-  };
-
-  const handleFieldDragStart = (e: React.DragEvent, fieldId: string) => {
-    e.dataTransfer.setData('text/field', fieldId);
-  };
-
-  const handleFieldDrop = (e: React.DragEvent, cardId: string, targetFieldId: string) => {
-    e.preventDefault();
-    e.stopPropagation();
-    const sourceFieldId = e.dataTransfer.getData('text/field');
-    if (!sourceFieldId || sourceFieldId === targetFieldId) return;
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.map(card => {
-        if (card.id === cardId) {
-          const fields = [...card.fields];
-          const sIdx = fields.findIndex((f: any) => f.id === sourceFieldId);
-          const tIdx = fields.findIndex((f: any) => f.id === targetFieldId);
-          if (sIdx !== -1 && tIdx !== -1) {
-            const [moved] = fields.splice(sIdx, 1);
-            fields.splice(tIdx, 0, moved);
-          }
-          return { ...card, fields };
-        }
-        return card;
-      })
-    })));
-  };
-
-  const handleCreateCard = async (stepKey: string) => {
-    if (!newCardTitle.trim() || !activeProjectId) return;
-
-    const formattedFields = newCardFields.map((f, idx) => ({
-      id: `field_${Date.now()}_${idx}`,
-      label: f.label.trim() || `세부 항목 ${idx + 1}`,
-      options: f.optionsStr.split(',').map(o => o.trim()).filter(Boolean)
-    }));
-
-    const newCardId = `card_${Date.now()}`;
-    const newCard = {
-      id: newCardId,
-      title: newCardTitle.trim(),
-      desc: newCardDesc.trim() || '새로 추가된 커스텀 항목입니다.',
-      fields: formattedFields.length > 0 ? formattedFields : [
-        {
-          id: `field_${Date.now()}_1`,
-          label: '1-1. 핵심 내용 입력',
-          options: ['기본 옵션 A', '기본 옵션 B']
-        }
-      ]
-    };
-
-    // Save to database
-    await createCard(
-      activeProjectId,
-      newCardId,
-      newCard.title,
-      newCard.desc,
-      stepKey,
-      newCard.fields
-    );
-
-    updateFrameworkData(prev => prev.map(step => {
-      if (step.stepKey === stepKey) {
-        return { ...step, cards: [...step.cards, newCard] };
-      }
-      return step;
-    }));
-
-    setNewCardTitle('');
-    setNewCardDesc('');
-    setNewCardFields([{ label: '1-1. 세부 항목 질문 입력', optionsStr: '옵션 1, 옵션 2, 옵션 3' }]);
-    setAddingCardStepKey(null);
-  };
-
-  const handleDeleteCard = async (cardId: string) => {
-    if (!activeProjectId) return;
-
-    // Delete from database with project_id filter
-    await deleteCard(cardId, activeProjectId);
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.filter(c => c.id !== cardId)
-    })));
-
-    if (activeCardId === cardId) {
-      const remaining = allFlattenedCards.filter(item => item.card.id !== cardId);
-      if (remaining.length > 0) {
-        setActiveCardId(remaining[0].card.id);
-      } else {
-        setViewMode('kanban');
-      }
-    }
-  };
-
-  const handleSaveCardMeta = async (cardId: string) => {
-    if (!activeProjectId) return;
-
-    // Find the card to get its current fields
-    let cardFields: any[] = [];
-    frameworkData.forEach(step => {
-      const card = step.cards.find(c => c.id === cardId);
-      if (card) {
-        cardFields = card.fields;
-      }
-    });
-
-    // Update in database with project_id filter
-    await updateCard(cardId, activeProjectId, {
-      title: tempCardTitle.trim(),
-      description: tempCardDesc.trim(),
-      fields: cardFields
-    });
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.map(card => {
-        if (card.id === cardId) {
-          return {
-            ...card,
-            title: tempCardTitle.trim() || card.title,
-            desc: tempCardDesc.trim() || card.desc
-          };
-        }
-        return card;
-      })
-    })));
-    setEditingCardId(null);
-  };
-
-  const handleAddFieldToCard = async (cardId: string) => {
-    if (!newFieldLabel.trim() || !activeProjectId) return;
-    const opts = newFieldOptionsStr.split(',').map(o => o.trim()).filter(Boolean);
-
-    // Find the card and its current fields
-    let currentFields: any[] = [];
-    frameworkData.forEach(step => {
-      const card = step.cards.find(c => c.id === cardId);
-      if (card) {
-        currentFields = card.fields;
-      }
-    });
-
-    const newFieldObj = {
-      id: `field_${Date.now()}`,
-      label: newFieldLabel.trim(),
-      options: opts.length > 0 ? opts : ['기본 옵션 1', '기본 옵션 2']
-    };
-
-    const updatedFields = [...currentFields, newFieldObj];
-
-    // Update in database with project_id filter
-    await updateCard(cardId, activeProjectId, {
-      fields: updatedFields
-    });
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.map(card => {
-        if (card.id === cardId) {
-          return {
-            ...card,
-            fields: updatedFields
-          };
-        }
-        return card;
-      })
-    })));
-
-    setNewFieldLabel('');
-    setNewFieldOptionsStr('');
-    setEditingFieldCardId(null);
-  };
-
-  const handleDeleteFieldFromCard = async (cardId: string, fieldId: string) => {
-    if (!activeProjectId) return;
-
-    // Find the card and its current fields
-    let currentFields: any[] = [];
-    frameworkData.forEach(step => {
-      const card = step.cards.find(c => c.id === cardId);
-      if (card) {
-        currentFields = card.fields;
-      }
-    });
-
-    const updatedFields = currentFields.filter((f: any) => f.id !== fieldId);
-
-    // Update in database with project_id filter
-    await updateCard(cardId, activeProjectId, {
-      fields: updatedFields
-    });
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.map(card => {
-        if (card.id === cardId) {
-          return {
-            ...card,
-            fields: updatedFields
-          };
-        }
-        return card;
-      })
-    })));
-  };
-
-  const handleUpdateFieldLabel = async (cardId: string, fieldId: string) => {
-    if (!tempFieldLabel.trim() || !activeProjectId) return;
-
-    // Find the card and its current fields
-    let currentFields: any[] = [];
-    frameworkData.forEach(step => {
-      const card = step.cards.find(c => c.id === cardId);
-      if (card) {
-        currentFields = card.fields;
-      }
-    });
-
-    const updatedFields = currentFields.map((f: any) => 
-      f.id === fieldId ? { ...f, label: tempFieldLabel.trim() } : f
-    );
-
-    // Update in database with project_id filter
-    await updateCard(cardId, activeProjectId, {
-      fields: updatedFields
-    });
-
-    updateFrameworkData(prev => prev.map(step => ({
-      ...step,
-      cards: step.cards.map(card => {
-        if (card.id === cardId) {
-          return {
-            ...card,
-            fields: updatedFields
-          };
-        }
-        return card;
-      })
-    })));
-    setEditingFieldId(null);
-    setTempFieldLabel('');
-  };
-
-  const handleApplyPickedOptions = () => {
-    if (selectedPickedOptions.length === 0) {
-      setIsPickerOpen(false);
-      return;
-    }
-
-    const joinedStr = selectedPickedOptions.join(', ');
-
-    if (pickerTargetType === 'newField') {
-      setNewFieldOptionsStr(prev => prev ? `${prev}, ${joinedStr}` : joinedStr);
-    } else if (pickerTargetType === 'newCardField' && pickerTargetFieldIndex !== null) {
-      const updated = [...newCardFields];
-      const current = updated[pickerTargetFieldIndex].optionsStr;
-      updated[pickerTargetFieldIndex].optionsStr = current ? `${current}, ${joinedStr}` : joinedStr;
-      setNewCardFields(updated);
-    } else if (pickerTargetType === 'existingField' && pickerTargetFieldId) {
-      setCustomOptions(prev => {
-        const existing = prev[pickerTargetFieldId] || [];
-        const merged = Array.from(newSet([...existing, ...selectedPickedOptions]));
-        return { ...prev, [pickerTargetFieldId]: merged };
-      });
-    }
-
-    setSelectedPickedOptions([]);
-    setIsPickerOpen(false);
-    setPickerSearchQuery('');
-  };
-
-  const helperToggleOption = (opt: string) => {
-    setSelectedPickedOptions(prev => 
-      prev.includes(opt) ? prev.filter(o => o !== opt) : [...prev, opt]
-    );
-  };
-
-  const newSet = (arr: string[]) => Array.from(new Set(arr));
-
-  const allFlattenedCards: { card: any; stepKey: string; stepTitle: string }[] = [];
-  frameworkData.forEach(step => {
-    step.cards.forEach(card => {
-      allFlattenedCards.push({ card, stepKey: step.stepKey, stepTitle: step.title });
-    });
+  const {
+    customOptions,
+    fieldModes,
+    setFieldModes,
+    customInputs,
+    setCustomInputs,
+    savePermanently,
+    setSavePermanently,
+    isPickerOpen,
+    setIsPickerOpen,
+    pickerStepKey,
+    setPickerStepKey,
+    pickerCardId,
+    setPickerCardId,
+    selectedPickedOptions,
+    setSelectedPickedOptions,
+    pickerSearchQuery,
+    setPickerSearchQuery,
+    setPickerTargetType,
+    setPickerTargetFieldIndex,
+    setPickerTargetFieldId,
+    getFieldOptions,
+    handleSelectChange,
+    handleStartEditOption,
+    handleCustomSubmit,
+    handleResetFieldValue,
+    getCardProgress,
+    handleApplyPickedOptions,
+    helperToggleOption,
+    newSet,
+  } = useFieldInteraction({
+    formData,
+    setFormData,
+    projectKey,
+    newCardFields,
+    setNewCardFields,
+    setNewFieldOptionsStr,
   });
 
   const currentCardIndex = allFlattenedCards.findIndex(item => item.card.id === activeCardId);
@@ -1617,8 +481,10 @@ export default function Pass5MasterApp() {
           isFolderOpen={isFolderOpen}
           setIsFolderOpen={setIsFolderOpen}
           projects={projects}
+          folders={folders}
           activeProjectId={activeProjectId}
           setActiveProjectId={setActiveProjectId}
+          activeFolderId={activeFolderId}
           isAddingProject={isAddingProject}
           setIsAddingProject={setIsAddingProject}
           newProjName={newProjName}
@@ -1641,6 +507,23 @@ export default function Pass5MasterApp() {
           setIsInviteModalOpen={setIsInviteModalOpen}
           viewMode={viewMode}
           focusStepKey={focusStepKey}
+          expandedFolderIds={expandedFolderIds}
+          handleToggleFolderExpanded={handleToggleFolderExpanded}
+          openFolder={openFolder}
+          isAddingFolder={isAddingFolder}
+          setIsAddingFolder={setIsAddingFolder}
+          newFolderName={newFolderName}
+          setNewFolderName={setNewFolderName}
+          handleAddFolder={handleAddFolder}
+          addingChildToFolderId={addingChildToFolderId}
+          setAddingChildToFolderId={setAddingChildToFolderId}
+          editingFolderId={editingFolderId}
+          setEditingFolderId={setEditingFolderId}
+          folderTempName={folderTempName}
+          setFolderTempName={setFolderTempName}
+          handleRenameFolder={handleRenameFolder}
+          handleDeleteFolder={handleDeleteFolder}
+          handleDropOnFolder={handleDropOnFolder}
         />
 
 
@@ -1674,10 +557,24 @@ export default function Pass5MasterApp() {
                   value={headerTempName}
                   onChange={(e) => setHeaderTempName(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleCommitHeaderProjectName(activeProject.id);
-                    if (e.key === 'Escape') setHeaderEditingProjId(null);
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      headerEnterCommitRef.current = true; // Enter로 커밋됨 표시 → blur가 재커밋 방지
+                      handleCommitHeaderProjectName(activeProject.id);
+                    }
+                    if (e.key === 'Escape') {
+                      headerEnterCommitRef.current = false;
+                      setHeaderEditingProjId(null);
+                    }
                   }}
-                  onBlur={() => handleCommitHeaderProjectName(activeProject.id)}
+                  onBlur={() => {
+                    // Enter 커밋 직후 따라오는 blur는 무시 (alert 중복 방지)
+                    if (headerEnterCommitRef.current) {
+                      headerEnterCommitRef.current = false;
+                      return;
+                    }
+                    handleCommitHeaderProjectName(activeProject.id);
+                  }}
                   className={`text-xl font-bold bg-transparent border-b-2 border-blue-500 outline-none w-[350px] ${isDark ? 'text-white' : 'text-zinc-900'}`}
                 />
               ) : (
@@ -1685,6 +582,7 @@ export default function Pass5MasterApp() {
                   <h1 className="text-xl font-bold tracking-tight cursor-pointer" onClick={() => navigateTo('kanban')}>{activeProject.name}</h1>
                   <button
                     onClick={() => {
+                      headerEnterCommitRef.current = false; // 새 편집 세션 시작 시 플래그 초기화
                       setHeaderEditingProjId(activeProject.id);
                       setHeaderTempName(activeProject.name);
                     }}
@@ -1728,6 +626,21 @@ export default function Pass5MasterApp() {
             </div>
           </header>
 
+          {/* 0. 폴더 인덱스(대시보드) 뷰 */}
+          {viewMode === 'folder' && (
+            <FolderIndexView
+              folders={folders}
+              projects={projects}
+              activeFolderId={activeFolderId}
+              isDark={isDark}
+              t={t}
+              navigateTo={navigateTo}
+              openFolder={openFolder}
+              handleGoBack={handleGoBack}
+              setActiveProjectId={setActiveProjectId}
+            />
+          )}
+
           {/* 1. 전체 칸반 보드 뷰 */}
           {viewMode === 'kanban' && (
             <KanbanBoard
@@ -1746,9 +659,9 @@ export default function Pass5MasterApp() {
               newCardFields={newCardFields}
               getCardProgress={getCardProgress}
               navigateTo={navigateTo}
-              handleDragOver={handleDragOver}
-              handleDrop={handleDrop}
-              handleDragStart={handleDragStart}
+              handleDragOver={handleCardDragOver}
+              handleDrop={handleCardDrop}
+              handleDragStart={handleCardDragStart}
               handleCommitStepMeta={handleCommitStepMeta}
               handleSaveCardMeta={handleSaveCardMeta}
               handleDeleteCard={handleDeleteCard}
@@ -1945,7 +858,7 @@ export default function Pass5MasterApp() {
                           key={field.id}
                           draggable
                           onDragStart={(e) => handleFieldDragStart(e, field.id)}
-                          onDragOver={handleDragOver}
+                          onDragOver={handleCardDragOver}
                           onDrop={(e) => handleFieldDrop(e, activeCardObj.id, field.id)}
                           className={`p-5 rounded-xl border ${isDark ? 'bg-zinc-800/40 border-zinc-700/50' : 'bg-zinc-50 border-zinc-200'} flex flex-col gap-3 relative group`}
                         >

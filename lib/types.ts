@@ -1,5 +1,5 @@
 // 뷰 모드 타입
-export type ViewMode = 'kanban' | 'focus' | 'detail' | 'report';
+export type ViewMode = 'kanban' | 'focus' | 'detail' | 'report' | 'folder';
 
 // 언어 모드 타입
 export type LangMode = 'KO' | 'EN';
@@ -35,6 +35,22 @@ export interface DictType {
   lightMode: string;
   darkMode: string;
   langToggle: string;
+  addFolderBtn: string;
+  addSubFolderBtn: string;
+  folderPlaceholder: string;
+  uncategorized: string;
+  subfolders: string;
+  folderEmpty: string;
+  folderLimitMsg: string;
+}
+
+// 폴더 타입 (supabase folders 테이블: id, name, parent_id, user_id, created_at)
+export interface Folder {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  user_id: string;
+  created_at: string;
 }
 
 // 프로젝트 타입
@@ -43,6 +59,7 @@ export interface Project {
   name: string;
   created_by: string;
   created_at: string;
+  folder_id?: string | null; // 소속 폴더 (null = 미분류)
   userRole?: string; // 현재 사용자의 권한
 }
 

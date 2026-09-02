@@ -26,7 +26,8 @@ export async function GET(request: NextRequest) {
     }
 
     // 멤버 목록 조회 (service role key 사용으로 RLS 우회)
-    const serviceRoleKey = process.env.NEXT_PUBLIC_SUPABASE_SERVICE_ROLE_KEY;
+    // 주의: service role key는 비밀키이므로 NEXT_PUBLIC_ 접두사를 붙이면 안 됨
+    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
     const supabaseAdmin = createClient(
       supabaseUrl,
       serviceRoleKey || supabaseKey

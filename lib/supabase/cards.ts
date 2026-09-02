@@ -110,7 +110,7 @@ export async function deleteCard(cardId: string, projectId: string): Promise<boo
     .eq('project_id', projectId);
 
   if (error) {
-    console.error('Error deleting card:', error);
+    console.error('Failed to delete card:', error.message, '(code:', error.code, ')');
     return false;
   }
 
