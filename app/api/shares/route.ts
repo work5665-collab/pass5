@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
+import { randomBytes } from 'crypto';
 import { canManageProject, resolveEffectiveRole } from '../../../lib/shares/permissions';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
@@ -18,11 +19,16 @@ async function resolveItemProjectId(
     return targetId;
   }
 
-  // folder: 해당 폴더가 속한 프로젝트 (folder_id 로 역조회)
+  // folder: 해당 폴더가 속한 프로젝트 (직속 + 하위 2단계 폴더 포함 역조회)
+  const { data: childFolders } = await supabaseAdmin
+    .from('folders')
+    .select('id')
+    .eq('parent_id', targetId);
+  const childIds = [targetId, ...(childFolders || []).map(f => f.id)];
   const { data } = await supabaseAdmin
     .from('projects')
     .select('id')
-    .eq('folder_id', targetId)
+    .in('folder_id', childIds)
     .limit(1)
     .maybeSingle();
   return data?.id || null;
@@ -158,7 +164,7 @@ export async function POST(request: NextRequest) {
       user_id: null,
       email: email || '',
       role,
-      link_token: shareMethod === 'link' ? (linkToken || null) : null,
+      link_token: shareMethod === 'link' ? (linkToken || randomBytes(32).toString('hex')) : null,
       expires_at: expiresAt || null,
       created_by: user.id,
     };

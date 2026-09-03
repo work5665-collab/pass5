@@ -6,7 +6,7 @@ import ShareModal, { ShareTarget } from './components/ShareModal';
 import ContextMenu from './components/ContextMenu';
 import ProjectSidebar from './components/ProjectSidebar';
 import KanbanBoard from '../components/KanbanBoard';
-import { ViewMode, LangMode, Folder } from '../lib/types';
+import { ViewMode, LangMode, Folder, ItemShare } from '../lib/types';
 import { supabase } from '../lib/supabase/client';
 import { initialFrameworkData } from '../lib/framework';
 import { dict } from '../lib/i18n';
@@ -15,6 +15,7 @@ import { useFolderData } from '../lib/hooks/useFolderData';
 import { useCardData } from '../lib/hooks/useCardData';
 import { useFieldInteraction } from '../lib/hooks/useFieldInteraction';
 import FolderIndexView from './components/FolderIndexView';
+import SharesView from './components/SharesView';
 
 export default function Pass5MasterApp() {
   const [user, setUser] = useState<any>(null);
@@ -186,6 +187,17 @@ export default function Pass5MasterApp() {
     if (lastState.stepKey) setFocusStepKey(lastState.stepKey);
     if (lastState.cardId) setActiveCardId(lastState.cardId);
     setActiveFolderId(lastState.folderId ?? null);
+  };
+
+  // 공유 현황 행 클릭 시 해당 대상(프로젝트/폴더)으로 이동
+  const handleOpenShareTarget = (share: ItemShare) => {
+    if (share.target_type === 'project') {
+      setActiveProjectId(share.target_id);
+      navigateTo('kanban');
+    } else {
+      setActiveFolderId(share.target_id);
+      navigateTo('folder');
+    }
   };
 
   const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
@@ -660,11 +672,17 @@ export default function Pass5MasterApp() {
               >
                 {t.kanbanView}
               </button>
-              <button 
-                onClick={() => navigateTo('report')} 
+              <button
+                onClick={() => navigateTo('report')}
                 className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'report' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
               >
                 {t.reportView}
+              </button>
+              <button
+                onClick={() => navigateTo('shares')}
+                className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+              >
+                🔗 공유 현황
               </button>
             </div>
           </header>
@@ -682,6 +700,17 @@ export default function Pass5MasterApp() {
               handleGoBack={handleGoBack}
               setActiveProjectId={setActiveProjectId}
               onShareFolder={openShareModal}
+            />
+          )}
+
+          {/* 0.5 공유 현황 뷰 (전체 워크스페이스 대상) */}
+          {viewMode === 'shares' && (
+            <SharesView
+              isDark={isDark}
+              t={t}
+              handleGoBack={handleGoBack}
+              onManageShare={openShareModal}
+              onOpenTarget={handleOpenShareTarget}
             />
           )}
 

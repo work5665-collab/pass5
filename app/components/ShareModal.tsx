@@ -37,6 +37,8 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // 역할 변경 로딩 상태
+  const [roleChangingId, setRoleChangingId] = useState<string | null>(null);
 
   // 역할 부여 규칙: 오너만 admin 부여 가능, admin은 editor/viewer 만 가능
   const availableRoles: { value: 'admin' | 'editor' | 'viewer'; label: string }[] =
@@ -198,6 +200,29 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
     }
   };
 
+  // 공유 역할 변경 (이메일 초대 건만)
+  const handleRoleChange = async (shareId: string, newRole: 'admin' | 'editor' | 'viewer') => {
+    setRoleChangingId(shareId);
+    setError(null);
+    try {
+      const res = await authFetch(`/api/shares/${shareId}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ role: newRole }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setShares(prev => prev.map(s => (s.id === shareId ? { ...s, role: newRole } : s)));
+        setNotice('권한이 변경되었습니다.');
+      } else {
+        setError(data.error || '권한 변경에 실패했습니다.');
+      }
+    } catch (e) {
+      setError('권한 변경에 실패했습니다.');
+    } finally {
+      setRoleChangingId(null);
+    }
+  };
+
   const roleLabel = (r: string) =>
     r === 'admin' ? '관리자' : r === 'editor' ? '편집자' : '뷰어';
 
@@ -336,8 +361,24 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
                             ? `링크 공유${share.status === 'revoked' ? ' (해지됨)' : ''}`
                             : share.email}
                         </div>
-                        <div className={`opacity-50`}>
-                          {roleLabel(share.role)}
+                        <div className={`opacity-50 flex items-center gap-1`}>
+                          {share.share_method === 'user' ? (
+                            <select
+                              value={share.role}
+                              onChange={(e) => handleRoleChange(share.id, e.target.value as 'admin' | 'editor' | 'viewer')}
+                              disabled={roleChangingId === share.id}
+                              className={`text-[10px] px-1.5 py-0.5 rounded border bg-transparent outline-none cursor-pointer ${
+                                isDark ? 'border-zinc-600 text-zinc-300' : 'border-zinc-300 text-zinc-600'
+                              } ${roleChangingId === share.id ? 'opacity-50' : ''}`}
+                            >
+                              {currentUserRole === 'owner' && <option value="admin">관리자</option>}
+                              <option value="editor">편집자</option>
+                              <option value="viewer">뷰어</option>
+                              {currentUserRole !== 'owner' && share.role === 'admin' && <option value="admin">관리자</option>}
+                            </select>
+                          ) : (
+                            <span>{roleLabel(share.role)}</span>
+                          )}
                           {share.share_method === 'link' && share.expires_at
                             ? ` · 만료 ${new Date(share.expires_at).toLocaleDateString()}`
                             : ''}

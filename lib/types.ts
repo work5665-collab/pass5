@@ -1,5 +1,5 @@
 // 뷰 모드 타입
-export type ViewMode = 'kanban' | 'focus' | 'detail' | 'report' | 'folder';
+export type ViewMode = 'kanban' | 'focus' | 'detail' | 'report' | 'folder' | 'shares';
 
 // 언어 모드 타입
 export type LangMode = 'KO' | 'EN';

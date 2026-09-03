@@ -17,10 +17,16 @@ async function resolveItemProjectId(
   if (targetType === 'project') {
     return targetId;
   }
+  // folder: 해당 폴더가 속한 프로젝트 (직속 + 하위 2단계 폴더 포함 역조회)
+  const { data: childFolders } = await supabaseAdmin
+    .from('folders')
+    .select('id')
+    .eq('parent_id', targetId);
+  const childIds = [targetId, ...(childFolders || []).map(f => f.id)];
   const { data } = await supabaseAdmin
     .from('projects')
     .select('id')
-    .eq('folder_id', targetId)
+    .in('folder_id', childIds)
     .limit(1)
     .maybeSingle();
   return data?.id || null;
@@ -61,7 +67,21 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     }
 
     const updates: any = {};
-    if (body.role !== undefined) updates.role = body.role;
+    if (body.role !== undefined) {
+      // admin 역할 부여는 오너만 가능
+      if (body.role === 'admin') {
+        const { data: requesterMember } = await supabaseAdmin
+          .from('project_members')
+          .select('role')
+          .eq('project_id', projectId)
+          .eq('user_id', user.id)
+          .maybeSingle();
+        if (requesterMember?.role !== 'owner') {
+          return NextResponse.json({ error: 'Forbidden: Only owners can grant admin role' }, { status: 403 });
+        }
+      }
+      updates.role = body.role;
+    }
     if (body.status !== undefined) updates.status = body.status;
     if (body.expires_at !== undefined) updates.expires_at = body.expires_at;
 

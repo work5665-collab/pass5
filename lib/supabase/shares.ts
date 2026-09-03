@@ -54,6 +54,26 @@ export async function fetchMyShares(): Promise<ItemShare[]> {
   return (data || []) as ItemShare[];
 }
 
+// "나에게 공유된 항목" 조회 (email 초대로 수신자 == 나 인 활성 공유)
+export async function fetchSharesSharedWithMe(): Promise<ItemShare[]> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return [];
+
+  const { data, error } = await supabase
+    .from('item_shares')
+    .select('*')
+    .eq('user_id', user.id)
+    .eq('status', 'active')
+    .order('created_at', { ascending: false });
+
+  if (error) {
+    console.error('Error fetching shares shared with me:', error);
+    return [];
+  }
+
+  return (data || []) as ItemShare[];
+}
+
 // 오픈 링크 토큰 생성 (Web Crypto 기반, 32바이트 hex = 64자)
 export function generateLinkToken(): string {
   return generateTokenBytes(32);
