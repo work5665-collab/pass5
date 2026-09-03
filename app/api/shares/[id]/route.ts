@@ -85,6 +85,22 @@ export async function PATCH(request: NextRequest, { params }: { params: Promise<
     if (body.status !== undefined) updates.status = body.status;
     if (body.expires_at !== undefined) updates.expires_at = body.expires_at;
 
+    // 이름/소속 라벨 수정 (각 15자 이내) — inline edit 용
+    if (body.name !== undefined) {
+      const n = String(body.name).trim();
+      if (n.length > 15) {
+        return NextResponse.json({ error: '이름은 15자 이내로 입력해 주세요.' }, { status: 400 });
+      }
+      updates.name = n;
+    }
+    if (body.department !== undefined) {
+      const d = String(body.department).trim();
+      if (d.length > 15) {
+        return NextResponse.json({ error: '소속/회사는 15자 이내로 입력해 주세요.' }, { status: 400 });
+      }
+      updates.department = d;
+    }
+
     const { error: updateError } = await supabaseAdmin
       .from('item_shares')
       .update(updates)

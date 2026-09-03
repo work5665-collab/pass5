@@ -124,13 +124,23 @@ async function hasFolderShareForUser(
 }
 
 // 사용자가 특정 프로젝트의 관리자/소유자인지 확인 (공유 생성/관리 권한)
+// - project_members 에서 owner/admin 이면 관리 가능
+// - 멤버십이 누락된 레거시 데이터 대비: 프로젝트 생성자(created_by)는 오너로 간주 (403 방지)
 export async function canManageProject(
   client: SupabaseClient,
   userId: string,
   projectId: string
 ): Promise<boolean> {
   const role = await getProjectMemberRole(client, userId, projectId);
-  return role === 'owner' || role === 'admin';
+  if (role === 'owner' || role === 'admin') return true;
+
+  // fallback: 프로젝트 생성자면 오너로 취급 (멤버십 미연동 레거시 프로젝트 대응)
+  const { data } = await client
+    .from('projects')
+    .select('created_by')
+    .eq('id', projectId)
+    .maybeSingle();
+  return data?.created_by === userId;
 }
 
 // 특정 아이템에 대한 사용자의 최종 유효 권한 해석 (Highest Privilege)

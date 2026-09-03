@@ -104,7 +104,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json();
-    const { targetType, targetId, shareMethod, email, role, linkToken, expiresAt } = body;
+    const { targetType, targetId, shareMethod, email, role, linkToken, expiresAt, name, department } = body;
 
     if (!targetType || !targetId || !shareMethod) {
       return NextResponse.json({ error: 'targetType, targetId, shareMethod are required' }, { status: 400 });
@@ -128,13 +128,27 @@ export async function POST(request: NextRequest) {
 
     // 대상 아이템이 속한 프로젝트의 관리자/소유자만 공유 생성 가능
     const projectId = await resolveItemProjectId(targetType as 'folder' | 'project', targetId);
-    if (!projectId) {
-      return NextResponse.json({ error: 'Item not found' }, { status: 404 });
-    }
 
-    const isManager = await canManageProject(supabaseAdmin, user.id, projectId);
-    if (!isManager) {
-      return NextResponse.json({ error: 'Forbidden: Only owners and admins can share items' }, { status: 403 });
+    // 프로젝트가 존재하지 않는 폴더인 경우: 폴더 생성자(owner)는 공유 허용
+    if (!projectId) {
+      if (targetType === 'folder') {
+        const { data: folderRow } = await supabaseAdmin
+          .from('folders')
+          .select('created_by')
+          .eq('id', targetId)
+          .maybeSingle();
+        if (folderRow?.created_by !== user.id) {
+          return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+        }
+        // 폴더 생성자이므로 통과
+      } else {
+        return NextResponse.json({ error: 'Item not found' }, { status: 404 });
+      }
+    } else {
+      const isManager = await canManageProject(supabaseAdmin, user.id, projectId);
+      if (!isManager) {
+        return NextResponse.json({ error: 'Forbidden: Only owners and admins can share items' }, { status: 403 });
+      }
     }
 
     // 역할 부여 규칙 (방어적 검증):
@@ -152,10 +166,27 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 이메일 초대 방식: 수신자 이메일 필수
-    if (shareMethod === 'user' && !email) {
-      return NextResponse.json({ error: 'email is required for user invites' }, { status: 400 });
+    // 이메일 초대 방식: 수신자 이메일 + 이름 + 소속 필수 (각 15자 이내)
+    if (shareMethod === 'user') {
+      if (!email) {
+        return NextResponse.json({ error: 'email is required for user invites' }, { status: 400 });
+      }
+      if (!name || !String(name).trim()) {
+        return NextResponse.json({ error: '이름을 입력해 주세요.' }, { status: 400 });
+      }
+      if (!department || !String(department).trim()) {
+        return NextResponse.json({ error: '소속/회사를 입력해 주세요.' }, { status: 400 });
+      }
+      if (String(name).trim().length > 15) {
+        return NextResponse.json({ error: '이름은 15자 이내로 입력해 주세요.' }, { status: 400 });
+      }
+      if (String(department).trim().length > 15) {
+        return NextResponse.json({ error: '소속/회사는 15자 이내로 입력해 주세요.' }, { status: 400 });
+      }
     }
+
+    // 오픈 링크는 보안상 '보기 전용(Viewer)' 고정 — 어떤 역할도 부여하지 않음
+    const finalRole = shareMethod === 'link' ? 'viewer' : role;
 
     const insertPayload: any = {
       target_type: targetType,
@@ -163,7 +194,9 @@ export async function POST(request: NextRequest) {
       share_method: shareMethod,
       user_id: null,
       email: email || '',
-      role,
+      name: shareMethod === 'user' ? String(name).trim() : null,
+      department: shareMethod === 'user' ? String(department).trim() : null,
+      role: finalRole,
       link_token: shareMethod === 'link' ? (linkToken || randomBytes(32).toString('hex')) : null,
       expires_at: expiresAt || null,
       created_by: user.id,

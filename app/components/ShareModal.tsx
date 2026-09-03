@@ -27,6 +27,8 @@ type Tab = 'invite' | 'link';
 export default function ShareModal({ isOpen, onClose, target, isDark }: ShareModalProps) {
   const [tab, setTab] = useState<Tab>('invite');
   const [email, setEmail] = useState('');
+  const [inviteName, setInviteName] = useState('');
+  const [inviteDepartment, setInviteDepartment] = useState('');
   const [role, setRole] = useState<'admin' | 'editor' | 'viewer'>('viewer');
   // 현재 사용자의 해당 프로젝트 내 역할 (드롭다운 권한 제어용)
   const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
@@ -98,6 +100,8 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
     if (isOpen && target) {
       setTab('invite');
       setEmail('');
+      setInviteName('');
+      setInviteDepartment('');
       setRole('viewer');
       setGeneratedLink(null);
       setError(null);
@@ -112,6 +116,10 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
   // 방식 A: 이메일 초대
   const handleInvite = async () => {
     if (!email.trim()) return;
+    if (!inviteName.trim()) { setError('이름을 입력해 주세요.'); return; }
+    if (!inviteDepartment.trim()) { setError('소속/회사를 입력해 주세요.'); return; }
+    if (inviteName.trim().length > 15) { setError('이름은 15자 이내로 입력해 주세요.'); return; }
+    if (inviteDepartment.trim().length > 15) { setError('소속/회사는 15자 이내로 입력해 주세요.'); return; }
     setLoading(true);
     setError(null);
     setNotice(null);
@@ -123,12 +131,16 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
           targetId: target.id,
           shareMethod: 'user',
           email: email.trim(),
+          name: inviteName.trim(),
+          department: inviteDepartment.trim(),
           role,
         }),
       });
       const data = await res.json();
       if (res.ok) {
         setEmail('');
+        setInviteName('');
+        setInviteDepartment('');
         setNotice(`${email.trim()} 님을 ${role === 'editor' ? '편집자' : '뷰어'}로 초대했습니다.`);
         loadShares();
       } else {
@@ -223,9 +235,6 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
     }
   };
 
-  const roleLabel = (r: string) =>
-    r === 'admin' ? '관리자' : r === 'editor' ? '편집자' : '뷰어';
-
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
@@ -289,6 +298,48 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium mb-2">
+                  이름 <span className="text-rose-400 text-[10px]">*필수</span> <span className="opacity-40 text-[10px]">({inviteName.length}/15)</span>
+                </label>
+                <input
+                  type="text"
+                  value={inviteName}
+                  onChange={(e) => setInviteName(e.target.value.slice(0, 15))}
+                  placeholder="홍길동"
+                  maxLength={15}
+                  className={inputCls}
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-2">
+                  소속/회사 <span className="text-rose-400 text-[10px]">*필수</span> <span className="opacity-40 text-[10px]">({inviteDepartment.length}/15)</span>
+                </label>
+                <input
+                  type="text"
+                  value={inviteDepartment}
+                  onChange={(e) => setInviteDepartment(e.target.value.slice(0, 15))}
+                  placeholder="회사명 또는 소속"
+                  maxLength={15}
+                  className={inputCls}
+                />
+                <div className="flex flex-wrap gap-1.5 mt-2">
+                  {['개인', '프리랜서', '클라이언트', '외주'].map(chip => (
+                    <button
+                      key={chip}
+                      type="button"
+                      onClick={() => setInviteDepartment(prev => (prev === chip ? '' : chip))}
+                      className={`text-[10px] px-2 py-0.5 rounded-full border font-medium transition ${
+                        inviteDepartment === chip
+                          ? isDark ? 'bg-blue-600/30 border-blue-500 text-blue-300' : 'bg-blue-100 border-blue-400 text-blue-700'
+                          : isDark ? 'border-zinc-700 text-zinc-400 hover:border-zinc-500' : 'border-zinc-300 text-zinc-500 hover:border-zinc-400'
+                      }`}
+                    >
+                      + {chip}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <div>
                 <label className="block text-sm font-medium mb-2">권한 선택</label>
                 <select
                   value={role}
@@ -302,7 +353,7 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
               </div>
               <button
                 onClick={handleInvite}
-                disabled={!email.trim() || loading}
+                disabled={!email.trim() || !inviteName.trim() || !inviteDepartment.trim() || loading}
                 className={`w-full px-4 py-2.5 text-sm rounded-lg font-medium transition bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed`}
               >
                 {loading ? '처리 중...' : '초대 보내기'}
@@ -377,7 +428,7 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
                               {currentUserRole !== 'owner' && share.role === 'admin' && <option value="admin">관리자</option>}
                             </select>
                           ) : (
-                            <span>{roleLabel(share.role)}</span>
+                            <span>🔒 보기 전용 (Viewer)</span>
                           )}
                           {share.share_method === 'link' && share.expires_at
                             ? ` · 만료 ${new Date(share.expires_at).toLocaleDateString()}`

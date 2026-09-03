@@ -6,8 +6,9 @@ import ShareModal, { ShareTarget } from './components/ShareModal';
 import ContextMenu from './components/ContextMenu';
 import ProjectSidebar from './components/ProjectSidebar';
 import KanbanBoard from '../components/KanbanBoard';
-import { ViewMode, LangMode, Folder, ItemShare } from '../lib/types';
+import { ViewMode, LangMode, Folder, SharedItem } from '../lib/types';
 import { supabase } from '../lib/supabase/client';
+import { fetchSharesSharedWithMe } from '../lib/supabase/shares';
 import { initialFrameworkData } from '../lib/framework';
 import { dict } from '../lib/i18n';
 import { useProjectData } from '../lib/hooks/useProjectData';
@@ -189,17 +190,6 @@ export default function Pass5MasterApp() {
     setActiveFolderId(lastState.folderId ?? null);
   };
 
-  // 공유 현황 행 클릭 시 해당 대상(프로젝트/폴더)으로 이동
-  const handleOpenShareTarget = (share: ItemShare) => {
-    if (share.target_type === 'project') {
-      setActiveProjectId(share.target_id);
-      navigateTo('kanban');
-    } else {
-      setActiveFolderId(share.target_id);
-      navigateTo('folder');
-    }
-  };
-
   const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
   const [frameworkDataPerProject, setFrameworkDataPerProject] = useState<Record<string, typeof initialFrameworkData>>({});
 
@@ -244,6 +234,52 @@ export default function Pass5MasterApp() {
     headerTempName,
     setHeaderTempName,
   });
+
+  // 공유 현황 접근 권한: Owner 또는 Admin 인 프로젝트가 하나라도 있는 경우만 허용
+  const canAccessShares = projects.some(p => p.userRole === 'owner' || p.userRole === 'admin');
+
+  // 공유 현황 항목(이름/아이콘) 클릭 시 해당 대상(프로젝트/폴더) 인덱스 뷰로 이동
+  const handleOpenShareTarget = (share: { target_type: 'folder' | 'project'; target_id: string }) => {
+    if (share.target_type === 'project') {
+      setActiveProjectId(share.target_id);
+      navigateTo('kanban');
+    } else {
+      setActiveFolderId(share.target_id);
+      navigateTo('folder');
+    }
+  };
+
+  // 사이드바 '공유받은 항목' 데이터 (타인으로부터 초대받은 프로젝트/폴더)
+  const [sharedItems, setSharedItems] = useState<SharedItem[]>([]);
+  useEffect(() => {
+    let active = true;
+    (async () => {
+      if (!user) {
+        setSharedItems([]);
+        return;
+      }
+      const shares = await fetchSharesSharedWithMe();
+      if (!active) return;
+      const folderIds = shares.filter(s => s.target_type === 'folder').map(s => s.target_id);
+      const projectIds = shares.filter(s => s.target_type === 'project').map(s => s.target_id);
+      const noneId = '00000000-0000-0000-0000-000000000000';
+      const [{ data: f }, { data: p }] = await Promise.all([
+        supabase.from('folders').select('id, name').in('id', folderIds.length ? folderIds : [noneId]),
+        supabase.from('projects').select('id, name').in('id', projectIds.length ? projectIds : [noneId]),
+      ]);
+      const folderName = Object.fromEntries((f || []).map((x: any) => [x.id, x.name]));
+      const projectName = Object.fromEntries((p || []).map((x: any) => [x.id, x.name]));
+      // 이름이 해석되지 않아도 항목은 유지 (fallback 표기) — 초대받은 항목이 누락되지 않도록
+      const items: SharedItem[] = shares.map(s => ({
+        shareId: s.id,
+        target_type: s.target_type,
+        target_id: s.target_id,
+        target_name: (s.target_type === 'folder' ? folderName[s.target_id] : projectName[s.target_id]) || '(삭제된 항목)',
+      }));
+      if (active) setSharedItems(items);
+    })();
+    return () => { active = false; };
+  }, [user]);
 
   // 로그인/프로젝트·카드 데이터 로딩 훅 (프로젝트 데이터 훅의 반환값 사용)
   useEffect(() => {
@@ -579,6 +615,7 @@ export default function Pass5MasterApp() {
           handleDeleteFolder={handleDeleteFolder}
           handleDropOnFolder={handleDropOnFolder}
           onItemContextMenu={openContextMenu}
+          sharedItems={sharedItems}
         />
 
 
@@ -678,12 +715,14 @@ export default function Pass5MasterApp() {
               >
                 {t.reportView}
               </button>
-              <button
-                onClick={() => navigateTo('shares')}
-                className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
-              >
-                🔗 공유 현황
-              </button>
+              {canAccessShares && (
+                <button
+                  onClick={() => navigateTo('shares')}
+                  className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+                >
+                  👥 공유 현황
+                </button>
+              )}
             </div>
           </header>
 
@@ -703,13 +742,12 @@ export default function Pass5MasterApp() {
             />
           )}
 
-          {/* 0.5 공유 현황 뷰 (전체 워크스페이스 대상) */}
-          {viewMode === 'shares' && (
+          {/* 0.5 공유 현황 뷰 (Owner/Admin 전용 · 사용자 중심 관리) */}
+          {viewMode === 'shares' && canAccessShares && (
             <SharesView
               isDark={isDark}
               t={t}
               handleGoBack={handleGoBack}
-              onManageShare={openShareModal}
               onOpenTarget={handleOpenShareTarget}
             />
           )}

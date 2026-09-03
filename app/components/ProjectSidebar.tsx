@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Project, Step, DictType, ViewMode, Folder } from '../../lib/types';
+import { Project, Step, DictType, ViewMode, Folder, SharedItem } from '../../lib/types';
 
 type FrameworkStep = Step;
 
@@ -55,6 +55,10 @@ interface ProjectSidebarProps {
   handleDeleteFolder: (folderId: string) => void;
   handleDropOnFolder: (folderId: string | null) => void;
   onItemContextMenu?: (e: React.MouseEvent, target: { type: 'folder' | 'project'; id: string; name: string }) => void;
+  // 타인으로부터 초대받은 '공유받은 항목' (프로젝트/폴더)
+  sharedItems?: SharedItem[];
+  // 읽기 전용 모드 (CUD 버튼/드래그 비활성화)
+  readOnly?: boolean;
 }
 
 export default function ProjectSidebar({
@@ -106,7 +110,9 @@ export default function ProjectSidebar({
   handleRenameFolder,
   handleDeleteFolder,
   handleDropOnFolder,
-  onItemContextMenu
+  onItemContextMenu,
+  sharedItems = [],
+  readOnly = false
 }: ProjectSidebarProps) {
   // Enter 커밋 후 따라오는 blur가 같은 커밋을 재수행하지 않도록 소비 플래그 (로컬 ref)
   const sidebarEnterRef = React.useRef(false);
@@ -127,10 +133,10 @@ export default function ProjectSidebar({
     return (
       <div
         key={proj.id}
-        draggable={!isEditing}
-        onDragStart={(e) => handleProjectDragStart(e, proj.id)}
+        draggable={!isEditing && !readOnly}
+        onDragStart={readOnly ? undefined : (e) => handleProjectDragStart(e, proj.id)}
         onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => handleProjectDrop(e, proj.id)}
+        onDrop={readOnly ? undefined : (e) => handleProjectDrop(e, proj.id)}
         onContextMenu={(e) => onItemContextMenu?.(e, { type: 'project', id: proj.id, name: proj.name })}
         onClick={() => {
           if (!isEditing) {
@@ -179,7 +185,7 @@ export default function ProjectSidebar({
           </div>
         )}
 
-        {!isEditing && (
+        {!isEditing && !readOnly && (
           <div
             className={`absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition rounded-md px-1 py-0.5 shadow-sm ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}
           >
@@ -237,7 +243,7 @@ export default function ProjectSidebar({
       <div
         key={folder.id}
         onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => {
+        onDrop={readOnly ? undefined : (e) => {
           e.preventDefault();
           e.stopPropagation();
           handleDropOnFolder(folder.id);
@@ -303,7 +309,7 @@ export default function ProjectSidebar({
           </div>
         )}
 
-        {!isEditing && (
+        {!isEditing && !readOnly && (
           <div
             className={`absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition rounded-md px-1 py-0.5 shadow-sm ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}
           >
@@ -410,6 +416,7 @@ export default function ProjectSidebar({
                 <span className="text-[10px] opacity-60">{isFolderOpen ? '▼' : '▶'}</span>
                 <span className="text-[10px] font-medium opacity-40 uppercase tracking-wider">{t.projects}</span>
               </div>
+              {!readOnly && (
               <div className="flex gap-1">
                 <button
                   type="button"
@@ -437,6 +444,7 @@ export default function ProjectSidebar({
                   </button>
                 )}
               </div>
+              )}
             </div>
 
             {/* 1단계 폴더 추가 폼 */}
@@ -531,7 +539,7 @@ export default function ProjectSidebar({
                 <div
                   className="mt-2 pt-2 border-t border-zinc-500/10 flex flex-col gap-1"
                   onDragOver={(e) => e.preventDefault()}
-                  onDrop={(e) => {
+                  onDrop={readOnly ? undefined : (e) => {
                     e.preventDefault();
                     e.stopPropagation();
                     handleDropOnFolder(null);
@@ -546,6 +554,34 @@ export default function ProjectSidebar({
                     projectsInFolder(null).map(renderProjectRow)
                   )}
                 </div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {isSidebarOpen && (
+          <div className="mt-5 pt-4 border-t border-zinc-500/10">
+            <div className="text-[10px] font-medium opacity-40 uppercase tracking-wider mb-2 px-1">🤝 참여 목록</div>
+            {sharedItems.length === 0 ? (
+              <div className="text-[10px] opacity-30 italic px-1">초대받은 항목이 없습니다.</div>
+            ) : (
+              <div className="flex flex-col gap-1">
+                {sharedItems.map(item => (
+                  <div
+                    key={item.shareId}
+                    onClick={() => item.target_type === 'project'
+                      ? (setActiveProjectId(item.target_id), navigateTo('kanban'))
+                      : openFolder(item.target_id)}
+                    className={`flex items-center gap-2 px-2.5 py-1.5 text-xs rounded-lg transition cursor-pointer ${
+                      isDark ? 'opacity-80 hover:bg-zinc-800/40 hover:opacity-100' : 'opacity-80 hover:bg-zinc-200/40 hover:opacity-100'
+                    }`}
+                    title={`${item.target_type === 'folder' ? '폴더' : '프로젝트'} 열기`}
+                  >
+                    <span>{item.target_type === 'folder' ? '📁' : '🗂️'}</span>
+                    <span className="truncate flex-1">{item.target_name}</span>
+                    <span className="text-[10px] opacity-40 shrink-0">{item.target_type === 'folder' ? '폴더' : '프로젝트'}</span>
+                  </div>
+                ))}
               </div>
             )}
           </div>

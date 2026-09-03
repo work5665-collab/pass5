@@ -40,6 +40,8 @@ interface KanbanBoardProps {
   setPickerTargetFieldIndex: (index: number | null) => void;
   setIsPickerOpen: (open: boolean) => void;
   onItemContextMenu?: (e: React.MouseEvent, target: { type: 'card'; id: string; name: string }) => void;
+  // 읽기 전용 모드 (카드 추가/수정/삭제/드래그 비활성화)
+  readOnly?: boolean;
 }
 
 export default function KanbanBoard({
@@ -79,6 +81,7 @@ export default function KanbanBoard({
   setPickerTargetFieldIndex,
   setIsPickerOpen,
   onItemContextMenu,
+  readOnly = false,
 }: KanbanBoardProps) {
   return (
     <div className="flex-1 flex flex-col">
@@ -95,10 +98,10 @@ export default function KanbanBoard({
           const isEditingThisStep = editingStepMetaKey === col.stepKey;
 
           return (
-            <div 
+            <div
               key={cIdx}
-              onDragOver={handleDragOver}
-              onDrop={(e) => handleDrop(e, col.stepKey)}
+              onDragOver={readOnly ? undefined : handleDragOver}
+              onDrop={readOnly ? undefined : (e) => handleDrop(e, col.stepKey)}
               className={`rounded-xl p-3.5 flex flex-col gap-3 min-h-[500px] transition ${isDark ? 'bg-zinc-900/40 border border-zinc-800/60' : 'bg-zinc-200/30 border border-zinc-200/60 shadow-sm'}`}
             >
               <div className="pb-2 border-b border-zinc-500/10 flex justify-between items-start group/header p-1 rounded-lg transition">
@@ -128,6 +131,7 @@ export default function KanbanBoard({
                     <div onClick={() => navigateTo('focus', { stepKey: col.stepKey })} className="cursor-pointer flex-1">
                       <div className="flex items-center gap-1.5">
                         <h3 className="font-extrabold text-base tracking-tight hover:text-blue-400 transition">{col.title}</h3>
+                        {!readOnly && (
                         <button
                           type="button"
                           onClick={(e) => {
@@ -141,6 +145,7 @@ export default function KanbanBoard({
                         >
                           ✏️
                         </button>
+                        )}
                       </div>
                       <p className="text-[10px] opacity-40 leading-tight mt-0.5">{col.subtitle}</p>
                     </div>
@@ -163,10 +168,10 @@ export default function KanbanBoard({
                   return (
                     <div
                       key={card.id}
-                      draggable={!isEditingMeta}
-                      onDragStart={(e) => handleDragStart(e, card.id)}
-                      onDragOver={handleDragOver}
-                      onDrop={(e) => handleDrop(e, col.stepKey, card.id)}
+                      draggable={!isEditingMeta && !readOnly}
+                      onDragStart={readOnly ? undefined : (e) => handleDragStart(e, card.id)}
+                      onDragOver={readOnly ? undefined : handleDragOver}
+                      onDrop={readOnly ? undefined : (e) => handleDrop(e, col.stepKey, card.id)}
                       onContextMenu={(e) => onItemContextMenu?.(e, { type: 'card', id: card.id, name: card.title })}
                       className={`p-3.5 rounded-xl text-xs transition relative group border ${
                         isCompleted
@@ -202,6 +207,7 @@ export default function KanbanBoard({
                               <span className={`text-[10px] font-bold ${isCompleted ? 'text-emerald-400' : 'text-blue-400'}`}>
                                 {isCompleted ? '✓ 완료됨' : `${progress}% 진행`}
                               </span>
+                              {!readOnly && (
                               <div className="flex items-center gap-1">
                                 <button
                                   onClick={(e) => {
@@ -226,6 +232,7 @@ export default function KanbanBoard({
                                   ✕
                                 </button>
                               </div>
+                              )}
                             </div>
                             <div className="font-bold text-xs mb-1 hover:text-blue-400 transition">{card.title}</div>
                             <p className="text-[10px] opacity-60 line-clamp-2 leading-relaxed">{card.desc}</p>
@@ -242,7 +249,7 @@ export default function KanbanBoard({
                   );
                 })}
 
-                {addingCardStepKey === col.stepKey ? (
+                {readOnly ? null : addingCardStepKey === col.stepKey ? (
                   <div className={`p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900 border-blue-500/50' : 'bg-white border-blue-400 shadow-md'}`}>
                     <div className="font-bold text-xs text-blue-400">새 의사결정 카드 생성</div>
                     <input

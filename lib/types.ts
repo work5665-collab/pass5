@@ -114,6 +114,8 @@ export interface ItemShare {
   share_method: 'user' | 'link';
   user_id: string | null;
   email: string;
+  name?: string | null; // 초대 시 이름 라벨
+  department?: string | null; // 초대 시 소속/회사 라벨
   role: 'admin' | 'editor' | 'viewer';
   link_token: string | null;
   expires_at: string | null;
@@ -121,6 +123,14 @@ export interface ItemShare {
   status: 'active' | 'revoked';
   created_at: string;
   updated_at: string;
+}
+
+// 사이드바 '공유받은 항목' 항목 (이름까지 해석된 공유 대상)
+export interface SharedItem {
+  shareId: string;
+  target_type: 'folder' | 'project';
+  target_id: string;
+  target_name: string;
 }
 
 // 공유 역할
