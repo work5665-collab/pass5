@@ -17,7 +17,8 @@ export const ROLE_ORDER: Record<string, number> = {
   owner: 4,
 };
 
-export type TargetType = 'card' | 'folder';
+// 카드 단위 공유는 제거됨 → 폴더/프로젝트 단위만 존재
+export type TargetType = 'folder' | 'project';
 
 interface FolderRow {
   id: string;
@@ -32,17 +33,6 @@ export function maxRole(a: string | null | undefined, b: string | null | undefin
   const ra = ROLE_ORDER[a] ?? 0;
   const rb = ROLE_ORDER[b] ?? 0;
   return ra >= rb ? a : b;
-}
-
-// 대상 카드의 project_id 조회
-async function getCardProjectId(client: SupabaseClient, cardId: string): Promise<string | null> {
-  const { data, error } = await client
-    .from('cards')
-    .select('project_id')
-    .eq('id', cardId)
-    .maybeSingle();
-  if (error || !data) return null;
-  return data.project_id as string;
 }
 
 // 폴더의 parent_id 조회
@@ -154,19 +144,9 @@ export async function resolveEffectiveRole(
   let projectId: string | null = null;
   let folderChain: FolderRow[] = [];
 
-  if (targetType === 'card') {
-    projectId = await getCardProjectId(client, targetId);
-    if (!projectId) return null;
-
-    // 카드가 속한 폴더 체인
-    const { data: project } = await client
-      .from('projects')
-      .select('folder_id')
-      .eq('id', projectId)
-      .maybeSingle();
-    if (project?.folder_id) {
-      folderChain = await getFolderChain(client, project.folder_id as string);
-    }
+  if (targetType === 'project') {
+    // project: targetId 가 곧 project_id. 폴더 체인 없음
+    projectId = targetId;
   } else {
     // folder: 해당 폴더가 속한 프로젝트들 중 사용자의 최고 프로젝트 역할 사용
     const { data: projData } = await client

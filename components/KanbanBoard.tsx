@@ -39,6 +39,7 @@ interface KanbanBoardProps {
   setPickerTargetType: (type: 'newField' | 'newCardField' | 'existingField') => void;
   setPickerTargetFieldIndex: (index: number | null) => void;
   setIsPickerOpen: (open: boolean) => void;
+  onItemContextMenu?: (e: React.MouseEvent, target: { type: 'card'; id: string; name: string }) => void;
 }
 
 export default function KanbanBoard({
@@ -77,6 +78,7 @@ export default function KanbanBoard({
   setPickerTargetType,
   setPickerTargetFieldIndex,
   setIsPickerOpen,
+  onItemContextMenu,
 }: KanbanBoardProps) {
   return (
     <div className="flex-1 flex flex-col">
@@ -165,6 +167,7 @@ export default function KanbanBoard({
                       onDragStart={(e) => handleDragStart(e, card.id)}
                       onDragOver={handleDragOver}
                       onDrop={(e) => handleDrop(e, col.stepKey, card.id)}
+                      onContextMenu={(e) => onItemContextMenu?.(e, { type: 'card', id: card.id, name: card.title })}
                       className={`p-3.5 rounded-xl text-xs transition relative group border ${
                         isCompleted
                           ? (isDark ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-emerald-50/80 border-emerald-300')

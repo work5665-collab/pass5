@@ -9,18 +9,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey || supabaseKey);
 
-// 대상 아이템이 속한 project_id 를 찾는 헬퍼
+// 대상 아이템이 속한 project_id 를 찾는 헬퍼 (카드 단위 공유는 제거됨)
 async function resolveItemProjectId(
-  targetType: 'card' | 'folder',
+  targetType: 'folder' | 'project',
   targetId: string
 ): Promise<string | null> {
-  if (targetType === 'card') {
-    const { data } = await supabaseAdmin
-      .from('cards')
-      .select('project_id')
-      .eq('id', targetId)
-      .maybeSingle();
-    return data?.project_id || null;
+  if (targetType === 'project') {
+    return targetId;
   }
 
   // folder: 해당 폴더가 속한 프로젝트 (folder_id 로 역조회)
@@ -34,7 +29,7 @@ async function resolveItemProjectId(
 }
 
 // GET: 특정 아이템의 공유 목록 조회
-// ?targetType=card|folder&targetId=xxx
+// ?targetType=folder|project&targetId=xxx
 export async function GET(request: NextRequest) {
   try {
     const { searchParams } = new URL(request.url);
@@ -43,6 +38,9 @@ export async function GET(request: NextRequest) {
 
     if (!targetType || !targetId) {
       return NextResponse.json({ error: 'targetType and targetId are required' }, { status: 400 });
+    }
+    if (!['folder', 'project'].includes(targetType)) {
+      return NextResponse.json({ error: 'Invalid targetType' }, { status: 400 });
     }
 
     const authHeader = request.headers.get('authorization');
@@ -56,11 +54,24 @@ export async function GET(request: NextRequest) {
     const hasAccess = await resolveEffectiveRole(
       supabaseAdmin,
       user.id,
-      targetType as 'card' | 'folder',
+      targetType as 'folder' | 'project',
       targetId
     );
     if (!hasAccess) {
       return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
+    // 현재 사용자의 해당 프로젝트 내 역할 (드롭다운 권한 제어용)
+    const projectId = await resolveItemProjectId(targetType as 'folder' | 'project', targetId);
+    let currentUserRole: string | null = null;
+    if (projectId) {
+      const { data: member } = await supabaseAdmin
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      currentUserRole = member?.role || null;
     }
 
     const { data: shares, error: sharesError } = await supabaseAdmin
@@ -74,7 +85,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: sharesError.message }, { status: 500 });
     }
 
-    return NextResponse.json({ shares: shares || [] });
+    return NextResponse.json({ shares: shares || [], currentUserRole });
 
   } catch (error) {
     console.error('Shares fetch error:', error);
@@ -92,13 +103,13 @@ export async function POST(request: NextRequest) {
     if (!targetType || !targetId || !shareMethod) {
       return NextResponse.json({ error: 'targetType, targetId, shareMethod are required' }, { status: 400 });
     }
-    if (!['card', 'folder'].includes(targetType)) {
+    if (!['folder', 'project'].includes(targetType)) {
       return NextResponse.json({ error: 'Invalid targetType' }, { status: 400 });
     }
     if (!['user', 'link'].includes(shareMethod)) {
       return NextResponse.json({ error: 'Invalid shareMethod' }, { status: 400 });
     }
-    if (!['editor', 'viewer'].includes(role)) {
+    if (!['admin', 'editor', 'viewer'].includes(role)) {
       return NextResponse.json({ error: 'Invalid role' }, { status: 400 });
     }
 
@@ -110,7 +121,7 @@ export async function POST(request: NextRequest) {
     }
 
     // 대상 아이템이 속한 프로젝트의 관리자/소유자만 공유 생성 가능
-    const projectId = await resolveItemProjectId(targetType as 'card' | 'folder', targetId);
+    const projectId = await resolveItemProjectId(targetType as 'folder' | 'project', targetId);
     if (!projectId) {
       return NextResponse.json({ error: 'Item not found' }, { status: 404 });
     }
@@ -118,6 +129,21 @@ export async function POST(request: NextRequest) {
     const isManager = await canManageProject(supabaseAdmin, user.id, projectId);
     if (!isManager) {
       return NextResponse.json({ error: 'Forbidden: Only owners and admins can share items' }, { status: 403 });
+    }
+
+    // 역할 부여 규칙 (방어적 검증):
+    // - 오너(owner)만 admin 역할 부여 가능
+    // - 관리자(admin)는 editor/viewer 만 부여 가능
+    if (role === 'admin') {
+      const { data: requesterMember } = await supabaseAdmin
+        .from('project_members')
+        .select('role')
+        .eq('project_id', projectId)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (requesterMember?.role !== 'owner') {
+        return NextResponse.json({ error: 'Forbidden: Only owners can grant admin role' }, { status: 403 });
+      }
     }
 
     // 이메일 초대 방식: 수신자 이메일 필수

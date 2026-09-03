@@ -109,12 +109,12 @@ export interface DatabaseCard {
 // 공유 타입 (Supabase item_shares 테이블)
 export interface ItemShare {
   id: string;
-  target_type: 'card' | 'folder';
+  target_type: 'folder' | 'project';
   target_id: string;
   share_method: 'user' | 'link';
   user_id: string | null;
   email: string;
-  role: 'editor' | 'viewer';
+  role: 'admin' | 'editor' | 'viewer';
   link_token: string | null;
   expires_at: string | null;
   created_by: string;
@@ -122,6 +122,11 @@ export interface ItemShare {
   created_at: string;
   updated_at: string;
 }
+
+// 공유 역할
+export type ShareRole = 'admin' | 'editor' | 'viewer';
+// 공유 대상 유형 (카드 단위 공유는 제거됨)
+export type ShareTargetType = 'folder' | 'project';
 
 // 사전 데이터 타입
 export type DictData = Record<LangMode, DictType>;

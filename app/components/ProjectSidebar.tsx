@@ -54,6 +54,7 @@ interface ProjectSidebarProps {
   handleRenameFolder: (folderId: string) => void;
   handleDeleteFolder: (folderId: string) => void;
   handleDropOnFolder: (folderId: string | null) => void;
+  onItemContextMenu?: (e: React.MouseEvent, target: { type: 'folder' | 'project'; id: string; name: string }) => void;
 }
 
 export default function ProjectSidebar({
@@ -104,7 +105,8 @@ export default function ProjectSidebar({
   setFolderTempName,
   handleRenameFolder,
   handleDeleteFolder,
-  handleDropOnFolder
+  handleDropOnFolder,
+  onItemContextMenu
 }: ProjectSidebarProps) {
   // Enter 커밋 후 따라오는 blur가 같은 커밋을 재수행하지 않도록 소비 플래그 (로컬 ref)
   const sidebarEnterRef = React.useRef(false);
@@ -129,6 +131,7 @@ export default function ProjectSidebar({
         onDragStart={(e) => handleProjectDragStart(e, proj.id)}
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleProjectDrop(e, proj.id)}
+        onContextMenu={(e) => onItemContextMenu?.(e, { type: 'project', id: proj.id, name: proj.name })}
         onClick={() => {
           if (!isEditing) {
             setActiveProjectId(proj.id);
@@ -239,6 +242,7 @@ export default function ProjectSidebar({
           e.stopPropagation();
           handleDropOnFolder(folder.id);
         }}
+        onContextMenu={(e) => onItemContextMenu?.(e, { type: 'folder', id: folder.id, name: folder.name })}
         className={`group relative flex items-center gap-1 px-1.5 py-1.5 text-xs rounded-lg transition cursor-pointer ${
           activeFolderId === folder.id
             ? (isDark ? 'bg-blue-600/25 text-white font-medium' : 'bg-blue-100 text-zinc-900 font-medium')

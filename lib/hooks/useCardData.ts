@@ -172,6 +172,58 @@ export function useCardData({
     setAddingCardStepKey(null);
   };
 
+  // 카드 복제: 원본 카드의 제목 뒤에 ' (복사본)'을 붙여 같은 단계에 새 카드 생성
+  const handleDuplicateCard = async (cardId: string) => {
+    if (!activeProjectId) return;
+
+    // 원본 카드와 소속 단계 찾기
+    let sourceCard: any = null;
+    let sourceStepKey: string | null = null;
+    frameworkData.forEach(step => {
+      const card = step.cards.find(c => c.id === cardId);
+      if (card) {
+        sourceCard = card;
+        sourceStepKey = step.stepKey;
+      }
+    });
+    if (!sourceCard || !sourceStepKey) return;
+
+    const newCardId = `card_${Date.now()}`;
+
+    // 필드 딥 클론 (새 id 부여 — 원본과 데이터 충돌 방지)
+    const clonedFields = (sourceCard.fields || []).map((f: any, idx: number) => ({
+      id: `field_${Date.now()}_${idx}`,
+      label: f.label,
+      options: Array.isArray(f.options) ? [...f.options] : [],
+    }));
+
+    const newTitle = `${sourceCard.title} (복사본)`;
+    const newDesc = sourceCard.desc || '';
+
+    const dbCard = await createCard(
+      activeProjectId,
+      newCardId,
+      newTitle,
+      newDesc,
+      sourceStepKey,
+      clonedFields
+    );
+
+    const finalCard = {
+      id: dbCard?.id || newCardId,
+      title: newTitle,
+      desc: newDesc,
+      fields: clonedFields,
+    };
+
+    updateFrameworkData(prev => prev.map(step => {
+      if (step.stepKey === sourceStepKey) {
+        return { ...step, cards: [...step.cards, finalCard] };
+      }
+      return step;
+    }));
+  };
+
   const handleDeleteCard = async (cardId: string) => {
     if (!activeProjectId) return;
 
@@ -469,6 +521,7 @@ export function useCardData({
     setDraggedCardId,
     loadCardsForProject,
     handleCreateCard,
+    handleDuplicateCard,
     handleDeleteCard,
     handleSaveCardMeta,
     handleCommitStepMeta,

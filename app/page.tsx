@@ -1,7 +1,9 @@
 'use client';
 
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import InviteModal from './components/InviteModal';
+import ShareModal, { ShareTarget } from './components/ShareModal';
+import ContextMenu from './components/ContextMenu';
 import ProjectSidebar from './components/ProjectSidebar';
 import KanbanBoard from '../components/KanbanBoard';
 import { ViewMode, LangMode, Folder } from '../lib/types';
@@ -119,6 +121,45 @@ export default function Pass5MasterApp() {
   const [isInviteModalOpen, setIsInviteModalOpen] = useState(false);
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState('member'); // admin, member, viewer
+
+  // 공유(ShareModal) 상태
+  const [shareTarget, setShareTarget] = useState<ShareTarget | null>(null);
+
+  // 공유 모달 열기 (카드/폴더/프로젝트 단위)
+  const openShareModal = useCallback((target: ShareTarget) => {
+    setShareTarget(target);
+  }, []);
+
+  // 우클릭 컨텍스트 메뉴 상태
+  // - type 'card' → 복제 액션 (카드 단위 공유는 제거됨)
+  // - type 'folder'|'project' → 공유 액션
+  const [ctxMenu, setCtxMenu] = useState<{
+    x: number;
+    y: number;
+    type: 'card' | 'folder' | 'project';
+    // 공유 대상 (folder/project)
+    target?: ShareTarget;
+    // 복제 대상 (card)
+    cardId?: string;
+  } | null>(null);
+
+  // 우클릭 핸들러: 커서 위치에 컨텍스트 메뉴 표시
+  const openContextMenu = useCallback((e: React.MouseEvent, item: { type: 'card' | 'folder' | 'project'; id: string; name: string }) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (item.type === 'card') {
+      setCtxMenu({ x: e.clientX, y: e.clientY, type: 'card', cardId: item.id });
+    } else {
+      setCtxMenu({
+        x: e.clientX,
+        y: e.clientY,
+        type: item.type,
+        target: { type: item.type, id: item.id, name: item.name },
+      });
+    }
+  }, []);
+
+  const closeContextMenu = useCallback(() => setCtxMenu(null), []);
 
   const [viewMode, setViewMode] = useState<ViewMode>('kanban');
   const [focusStepKey, setFocusStepKey] = useState<string>('Input');
@@ -291,6 +332,7 @@ export default function Pass5MasterApp() {
     allFlattenedCards,
     handleDeleteCard,
     handleSaveCardMeta,
+    handleDuplicateCard,
   } = useCardData({
     activeProjectId,
     setActiveProjectId,
@@ -524,6 +566,7 @@ export default function Pass5MasterApp() {
           handleRenameFolder={handleRenameFolder}
           handleDeleteFolder={handleDeleteFolder}
           handleDropOnFolder={handleDropOnFolder}
+          onItemContextMenu={openContextMenu}
         />
 
 
@@ -638,6 +681,7 @@ export default function Pass5MasterApp() {
               openFolder={openFolder}
               handleGoBack={handleGoBack}
               setActiveProjectId={setActiveProjectId}
+              onShareFolder={openShareModal}
             />
           )}
 
@@ -679,6 +723,7 @@ export default function Pass5MasterApp() {
               setPickerTargetType={setPickerTargetType}
               setPickerTargetFieldIndex={setPickerTargetFieldIndex}
               setIsPickerOpen={setIsPickerOpen}
+              onItemContextMenu={openContextMenu}
             />
           )}
 
@@ -1386,6 +1431,41 @@ export default function Pass5MasterApp() {
         onSendInvite={handleSendInvite}
         isDark={isDark}
       />
+
+      {/* 공유(파일/폴더/프로젝트) 모달 */}
+      <ShareModal
+        isOpen={shareTarget !== null}
+        onClose={() => setShareTarget(null)}
+        target={shareTarget}
+        isDark={isDark}
+      />
+
+      {/* 우클릭 컨텍스트 메뉴 */}
+      {ctxMenu && (
+        <ContextMenu
+          x={ctxMenu.x}
+          y={ctxMenu.y}
+          isDark={isDark}
+          onClose={closeContextMenu}
+          items={
+            ctxMenu.type === 'card'
+              ? [
+                  {
+                    label: '복제',
+                    icon: '📋',
+                    onClick: () => handleDuplicateCard(ctxMenu.cardId!),
+                  },
+                ]
+              : [
+                  {
+                    label: '공유',
+                    icon: '🔗',
+                    onClick: () => openShareModal(ctxMenu.target!),
+                  },
+                ]
+          }
+        />
+      )}
 
     </div>
   );

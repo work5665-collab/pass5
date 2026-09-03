@@ -42,15 +42,10 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Link has expired' }, { status: 400 });
     }
 
-    // 대상 아이템이 속한 프로젝트 찾기
+    // 대상 아이템이 속한 프로젝트 찾기 (카드 단위 공유는 제거됨)
     let projectId: string | null = null;
-    if (share.target_type === 'card') {
-      const { data: card } = await supabaseAdmin
-        .from('cards')
-        .select('project_id')
-        .eq('id', share.target_id)
-        .maybeSingle();
-      projectId = card?.project_id || null;
+    if (share.target_type === 'project') {
+      projectId = share.target_id;
     } else {
       // folder: 해당 폴더가 속한 프로젝트 (하위 포함 대략적으로 첫 프로젝트)
       const { data: proj } = await supabaseAdmin

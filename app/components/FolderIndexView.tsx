@@ -2,6 +2,7 @@
 
 import React from 'react';
 import { Folder, Project, DictType, ViewMode } from '../../lib/types';
+import type { ShareTarget } from './ShareModal';
 
 interface FolderIndexViewProps {
   folders: Folder[];
@@ -13,6 +14,7 @@ interface FolderIndexViewProps {
   openFolder: (folderId: string) => void;
   handleGoBack: () => void;
   setActiveProjectId: (id: string) => void;
+  onShareFolder?: (target: ShareTarget) => void;
 }
 
 export default function FolderIndexView({
@@ -25,6 +27,7 @@ export default function FolderIndexView({
   openFolder,
   handleGoBack,
   setActiveProjectId,
+  onShareFolder,
 }: FolderIndexViewProps) {
   const folder = folders.find(f => f.id === activeFolderId);
 
@@ -73,9 +76,21 @@ export default function FolderIndexView({
       </div>
 
       {/* 폴더 제목 */}
-      <div>
-        <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">Folder Index</span>
-        <h2 className="text-xl font-black mt-0.5">📁 {folder.name}</h2>
+      <div className="flex items-start justify-between">
+        <div>
+          <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">Folder Index</span>
+          <h2 className="text-xl font-black mt-0.5">📁 {folder.name}</h2>
+        </div>
+        {onShareFolder && (
+          <button
+            onClick={() => onShareFolder({ type: 'folder', id: folder.id, name: folder.name })}
+            className={`text-xs px-3 py-1.5 rounded-lg font-semibold transition ${
+              isDark ? 'bg-blue-600/20 text-blue-400 hover:bg-blue-600 hover:text-white' : 'bg-blue-100 text-blue-600 hover:bg-blue-600 hover:text-white'
+            }`}
+          >
+            공유
+          </button>
+        )}
       </div>
 
       {/* 하위 폴더 목록 */}
@@ -88,16 +103,30 @@ export default function FolderIndexView({
             {subfolders.map(sub => {
               const subProjects = projects.filter(p => p.folder_id === sub.id);
               return (
-                <button
-                  key={sub.id}
-                  onClick={() => openFolder(sub.id)}
-                  className={cardCls(true)}
-                >
-                  <div className="text-sm font-bold truncate">📁 {sub.name}</div>
-                  <div className={`text-[11px] mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
-                    {subProjects.length} {t.projects}
-                  </div>
-                </button>
+                <div key={sub.id} className="relative group">
+                  <button
+                    onClick={() => openFolder(sub.id)}
+                    className={`${cardCls(true)} w-full`}
+                  >
+                    <div className="text-sm font-bold truncate">📁 {sub.name}</div>
+                    <div className={`text-[11px] mt-1 ${isDark ? 'text-zinc-500' : 'text-zinc-500'}`}>
+                      {subProjects.length} {t.projects}
+                    </div>
+                  </button>
+                  {onShareFolder && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onShareFolder({ type: 'folder', id: sub.id, name: sub.name });
+                      }}
+                      className={`absolute top-2 right-2 text-[10px] px-2 py-0.5 rounded opacity-0 group-hover:opacity-100 transition ${
+                        isDark ? 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700' : 'bg-zinc-100 text-zinc-600 hover:bg-zinc-200'
+                      }`}
+                    >
+                      공유
+                    </button>
+                  )}
+                </div>
               );
             })}
           </div>

@@ -17,7 +17,7 @@ function generateTokenBytes(length: number): string {
 
 // 대상 아이템의 공유 목록 조회 (사용자가 만든 것 + 자신에게 공유된 것)
 export async function fetchSharesForItem(
-  targetType: 'card' | 'folder',
+  targetType: 'folder' | 'project',
   targetId: string
 ): Promise<ItemShare[]> {
   const { data, error } = await supabase
@@ -64,11 +64,11 @@ export function generateLinkToken(): string {
 // - shareMethod 'link': linkToken + expiresAt (선택) — 오픈 링크
 export async function createShare(
   params: {
-    targetType: 'card' | 'folder';
+    targetType: 'folder' | 'project';
     targetId: string;
     shareMethod: 'user' | 'link';
     email?: string;
-    role: 'editor' | 'viewer';
+    role: 'admin' | 'editor' | 'viewer';
     linkToken?: string;
     expiresAt?: string | null;
   }
@@ -114,7 +114,7 @@ export async function deleteShare(shareId: string): Promise<boolean> {
 // 공유 역할/상태 수정
 export async function updateShare(
   shareId: string,
-  updates: Partial<{ role: 'editor' | 'viewer'; status: 'active' | 'revoked'; expires_at: string | null }>
+  updates: Partial<{ role: 'admin' | 'editor' | 'viewer'; status: 'active' | 'revoked'; expires_at: string | null }>
 ): Promise<boolean> {
   const { error } = await supabase
     .from('item_shares')

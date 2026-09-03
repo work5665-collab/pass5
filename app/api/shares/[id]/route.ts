@@ -9,18 +9,13 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 const supabaseAdmin = createClient(supabaseUrl, serviceRoleKey || supabaseKey);
 
-// 대상 아이템이 속한 project_id 찾기
+// 대상 아이템이 속한 project_id 찾기 (카드 단위 공유는 제거됨)
 async function resolveItemProjectId(
-  targetType: 'card' | 'folder',
+  targetType: 'folder' | 'project',
   targetId: string
 ): Promise<string | null> {
-  if (targetType === 'card') {
-    const { data } = await supabaseAdmin
-      .from('cards')
-      .select('project_id')
-      .eq('id', targetId)
-      .maybeSingle();
-    return data?.project_id || null;
+  if (targetType === 'project') {
+    return targetId;
   }
   const { data } = await supabaseAdmin
     .from('projects')
