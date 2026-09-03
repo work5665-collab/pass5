@@ -115,13 +115,20 @@ export function useProjectData({
       })
     );
 
+    // 권한 필터링: 접근 권한(멤버십)이 없는 프로젝트는 사이드바에서 제외 (정책 6)
+    // - userRole 이 null 인 프로젝트 = project_members 에 존재하지 않음 = 접근 불가
+    // - 공유(item_shares)로 접근한 프로젝트는 멤버십 연동(accept) 과정에서 project_members 에
+    //   viewer/editor 로 추가되므로, 여기서도 자연스럽게 표시됨
+    const accessibleProjects = projectsWithRoles.filter(p => p.userRole !== null);
+
     console.log('Projects with roles:', projectsWithRoles);
-    setProjects(projectsWithRoles);
+    console.log('Accessible projects (after permission filter):', accessibleProjects);
+    setProjects(accessibleProjects);
 
     // Initialize frameworkData for any new projects
     setFrameworkDataPerProject(prev => {
       const updated = { ...prev };
-      projectsWithRoles.forEach(project => {
+      accessibleProjects.forEach(project => {
         if (!updated[project.id]) {
           updated[project.id] = JSON.parse(JSON.stringify(initialFrameworkData));
         }
@@ -129,11 +136,11 @@ export function useProjectData({
       return updated;
     });
 
-    if (projectsWithRoles.length > 0) {
+    if (accessibleProjects.length > 0) {
       setActiveProjectId(prev =>
-        prev && projectsWithRoles.some(project => project.id === prev)
+        prev && accessibleProjects.some(project => project.id === prev)
           ? prev
-          : projectsWithRoles[0].id
+          : accessibleProjects[0].id
       );
     } else {
       setActiveProjectId(null);

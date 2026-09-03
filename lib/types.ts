@@ -106,5 +106,22 @@ export interface DatabaseCard {
   updated_at: string;
 }
 
+// 공유 타입 (Supabase item_shares 테이블)
+export interface ItemShare {
+  id: string;
+  target_type: 'card' | 'folder';
+  target_id: string;
+  share_method: 'user' | 'link';
+  user_id: string | null;
+  email: string;
+  role: 'editor' | 'viewer';
+  link_token: string | null;
+  expires_at: string | null;
+  created_by: string;
+  status: 'active' | 'revoked';
+  created_at: string;
+  updated_at: string;
+}
+
 // 사전 데이터 타입
 export type DictData = Record<LangMode, DictType>;
