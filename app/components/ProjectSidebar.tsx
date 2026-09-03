@@ -135,7 +135,7 @@ export default function ProjectSidebar({
             navigateTo('kanban');
           }
         }}
-        className={`group flex items-center justify-between px-2.5 py-2 text-xs rounded-lg transition cursor-pointer ${
+        className={`group relative flex items-center px-2.5 py-2 text-xs rounded-lg transition cursor-pointer ${
           activeProjectId === proj.id
             ? (isDark ? 'bg-zinc-800/80 font-medium text-white' : 'bg-zinc-200/80 font-medium text-zinc-900')
             : (isDark ? 'opacity-70 hover:bg-zinc-800/40 hover:opacity-100' : 'opacity-70 hover:bg-zinc-200/40 hover:opacity-100')
@@ -170,14 +170,16 @@ export default function ProjectSidebar({
             className={`w-full bg-transparent outline-none border-b border-blue-500 text-xs ${isDark ? 'text-white' : 'text-zinc-900'}`}
           />
         ) : (
-          <div className="flex items-center gap-2 truncate flex-1">
+          <div className="flex items-center gap-2 truncate flex-1 min-w-0">
             <span>🗂️</span>
             <span className="truncate">{proj.name}</span>
           </div>
         )}
 
         {!isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition ml-1">
+          <div
+            className={`absolute right-1.5 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition rounded-md px-1 py-0.5 shadow-sm ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}
+          >
             <button
               type="button"
               onClick={(e) => {
@@ -237,7 +239,7 @@ export default function ProjectSidebar({
           e.stopPropagation();
           handleDropOnFolder(folder.id);
         }}
-        className={`group flex items-center gap-1 px-1.5 py-1.5 text-xs rounded-lg transition cursor-pointer ${
+        className={`group relative flex items-center gap-1 px-1.5 py-1.5 text-xs rounded-lg transition cursor-pointer ${
           activeFolderId === folder.id
             ? (isDark ? 'bg-blue-600/25 text-white font-medium' : 'bg-blue-100 text-zinc-900 font-medium')
             : (isDark ? 'opacity-80 hover:bg-zinc-800/40 hover:opacity-100' : 'opacity-80 hover:bg-zinc-200/40 hover:opacity-100')
@@ -298,7 +300,9 @@ export default function ProjectSidebar({
         )}
 
         {!isEditing && (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition ml-auto shrink-0">
+          <div
+            className={`absolute right-1 top-1/2 -translate-y-1/2 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition rounded-md px-1 py-0.5 shadow-sm ${isDark ? 'bg-zinc-900' : 'bg-zinc-50'}`}
+          >
             <button
               type="button"
               title={lvl2 ? t.folderLimitMsg : '하위 폴더 추가'}
