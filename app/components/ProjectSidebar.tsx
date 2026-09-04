@@ -57,6 +57,8 @@ interface ProjectSidebarProps {
   onItemContextMenu?: (e: React.MouseEvent, target: { type: 'folder' | 'project'; id: string; name: string }) => void;
   // 타인으로부터 초대받은 '공유받은 항목' (프로젝트/폴더)
   sharedItems?: SharedItem[];
+  userEmail?: string;
+  onLogout?: () => void;
   // 읽기 전용 모드 (CUD 버튼/드래그 비활성화)
   readOnly?: boolean;
 }
@@ -112,6 +114,8 @@ export default function ProjectSidebar({
   handleDropOnFolder,
   onItemContextMenu,
   sharedItems = [],
+  userEmail,
+  onLogout,
   readOnly = false
 }: ProjectSidebarProps) {
   // Enter 커밋 후 따라오는 blur가 같은 커밋을 재수행하지 않도록 소비 플래그 (로컬 ref)
@@ -397,7 +401,7 @@ export default function ProjectSidebar({
   );
 
   return (
-    <aside className={`${isSidebarOpen ? 'w-64' : 'w-8'} transition-all duration-300 flex flex-col justify-between p-3 bg-transparent border-r border-zinc-500/10 overflow-hidden`}>
+    <aside className={`${isSidebarOpen ? 'w-64' : 'w-8'} transition-all duration-300 flex flex-col justify-between p-3 bg-transparent border-r border-zinc-500/10 overflow-hidden print:hidden`}>
       <div>
         <div className={`flex items-center mb-6 px-1 ${isSidebarOpen ? 'justify-between' : 'justify-center'}`}>
           {isSidebarOpen && <span className="font-bold text-xs tracking-wider opacity-70 cursor-pointer" onClick={() => navigateTo('kanban')}>{t.workspace}</span>}
@@ -609,6 +613,25 @@ export default function ProjectSidebar({
           </div>
         )}
       </div>
+
+      {/* 유저 정보 푸터 (헤더에서 이전) */}
+      {isSidebarOpen && userEmail && (
+        <div className={`mt-4 pt-3 border-t border-zinc-500/10 px-1 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-[11px] truncate" title={userEmail}>{userEmail}</span>
+            {onLogout && (
+              <button
+                onClick={onLogout}
+                className={`shrink-0 text-[10px] px-2 py-1 rounded transition ${
+                  isDark ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white' : 'bg-rose-100 text-rose-600 hover:bg-rose-500 hover:text-white'
+                }`}
+              >
+                로그아웃
+              </button>
+            )}
+          </div>
+        </div>
+      )}
     </aside>
   );
 }

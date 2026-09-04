@@ -91,6 +91,12 @@ export function useCardData({
 
   // --- Data loading ---
   const loadCardsForProject = async (projectId: string) => {
+    // 가드 조건: projectId가 유효할 때만 fetchCardsByProject 호출
+    if (!projectId || projectId.trim() === '') {
+      console.warn('loadCardsForProject: 유효하지 않은 projectId — 카드 로드 스킵');
+      setFrameworkData(initialFrameworkData);
+      return;
+    }
     try {
       const dbCards = await fetchCardsByProject(projectId);
 

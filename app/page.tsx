@@ -6,7 +6,7 @@ import ShareModal, { ShareTarget } from './components/ShareModal';
 import ContextMenu from './components/ContextMenu';
 import ProjectSidebar from './components/ProjectSidebar';
 import KanbanBoard from '../components/KanbanBoard';
-import { ViewMode, LangMode, Folder, SharedItem } from '../lib/types';
+import { ViewMode, LangMode, Folder, SharedItem, Card } from '../lib/types';
 import { supabase } from '../lib/supabase/client';
 import { fetchSharesSharedWithMe } from '../lib/supabase/shares';
 import { initialFrameworkData } from '../lib/framework';
@@ -40,6 +40,24 @@ export default function Pass5MasterApp() {
   useEffect(() => {
     setIsMounted(true);
   }, []);
+
+  // ─── 검색/필터 상태 (1단계: 인덱스 키워드 검색 및 카드 강조/Dimming) ───
+  // 주의: 조기 반환문(early return) 위쪽에 선언해 Hook 호출 순서를 항상 일정하게 유지
+  const [searchKeyword, setSearchKeyword] = useState('');
+  const [searchTitle, setSearchTitle] = useState(true);
+  const [searchDesc, setSearchDesc] = useState(true);
+
+  const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+  const isSearchActive = normalizedSearchKeyword.length > 0;
+  const isCardMatch = useCallback(
+    (card: Card) => {
+      if (!isSearchActive) return true;
+      const inTitle = searchTitle && card.title.toLowerCase().includes(normalizedSearchKeyword);
+      const inDesc = searchDesc && card.desc.toLowerCase().includes(normalizedSearchKeyword);
+      return inTitle || inDesc;
+    },
+    [isSearchActive, normalizedSearchKeyword, searchTitle, searchDesc],
+  );
 
   const loadProjectMembers = async (projectId: string) => {
     try {
@@ -167,6 +185,21 @@ export default function Pass5MasterApp() {
   const [focusStepKey, setFocusStepKey] = useState<string>('Input');
   const [activeCardId, setActiveCardId] = useState<string>('purpose_and_problem');
   const [historyStack, setHistoryStack] = useState<{ mode: ViewMode; stepKey?: string; cardId?: string; folderId?: string }[]>([]);
+  // 우측 하단 플로팅 TOP 버튼 — 스크롤 임계값 초과 시 표시
+  const [showTopBtn, setShowTopBtn] = useState(false);
+  const mainScrollRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    const el = mainScrollRef.current;
+    if (!el) return;
+    console.log('TOP-btn: scroll listener attached to main');
+    const onScroll = () => {
+      console.log('scrolling:', el.scrollTop);
+      setShowTopBtn(el.scrollTop > 300);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, []);
 
   const navigateTo = (newMode: ViewMode, options?: { stepKey?: string; cardId?: string; folderId?: string }) => {
     setHistoryStack(prev => [...prev, { mode: viewMode, stepKey: focusStepKey, cardId: activeCardId, folderId: activeFolderId ?? undefined }]);
@@ -561,9 +594,9 @@ export default function Pass5MasterApp() {
   }
 
   return (
-    <div className={`min-h-screen flex flex-col justify-between transition-colors duration-200 ${isDark ? 'bg-[#18181b] text-[#f4f4f5]' : 'bg-[#fafaf9] text-[#18181b]'}`}>
+    <div className={`h-screen overflow-hidden flex flex-col justify-between transition-colors duration-200 print:h-auto print:max-h-none print:overflow-visible ${isDark ? 'bg-[#18181b] text-[#f4f4f5]' : 'bg-[#fafaf9] text-[#18181b]'}`}>
       <div className="flex flex-1 overflow-hidden">
-        
+
         {/* 사이드바 */}
         <ProjectSidebar
           isSidebarOpen={isSidebarOpen}
@@ -616,11 +649,13 @@ export default function Pass5MasterApp() {
           handleDropOnFolder={handleDropOnFolder}
           onItemContextMenu={openContextMenu}
           sharedItems={sharedItems}
+          userEmail={user?.email}
+          onLogout={handleLogout}
         />
 
 
         {/* 메인 콘텐츠 영역 */}
-        <main className={`flex-1 flex flex-col p-8 overflow-y-auto ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
+        <main ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`relative flex-1 flex flex-col px-8 pb-8 overflow-y-auto print:h-auto print:overflow-visible print:p-0 ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
           
           <style>{`
             ::-webkit-scrollbar {
@@ -637,94 +672,196 @@ export default function Pass5MasterApp() {
             ::-webkit-scrollbar-thumb:hover {
               background: ${isDark ? '#3f3f46' : '#d4d4d8'};
             }
+
+            /* ─── 인쇄/PDF 저장 전용 교정 (A4 라이트 문서화) ─── */
+            @media print {
+              /* 브라우저 기본 헤더(사이트명/날짜)·푸터(URL) 인쇄 표기 제거 */
+              @page { size: auto; margin: 15mm; }
+              html, body {
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact;
+                print-color-adjust: exact;
+              }
+              /* 문서 본문 패널 — 고정 높이/스크롤/최대높이 해제 → 2페이지 이상 전체 본문이 연달아 출력 */
+              main, .h-screen, .overflow-y-auto, .overflow-hidden {
+                height: auto !important;
+                max-height: none !important;
+                overflow: visible !important;
+              }
+
+              /* 다크모드 무조건 해제 → 깔끔한 라이트 보고서 */
+              * {
+                background-color: transparent !important;
+                background-image: none !important;
+                box-shadow: none !important;
+                border: none !important;
+                border-radius: 0 !important;
+                color: #111827 !important;
+              }
+              /* 최상위 본문 배경은 흰색으로 */
+              html, body, main { background: #ffffff !important; }
+
+              /* 최상단 문서 타이틀 — 보고서 헤더 스타일, 하단 여백 최소화해 본문이 1페이지부터 이어지도록 */
+              .text-center h1 {
+                font-size: 1.5rem !important;
+                font-weight: 800 !important;
+                letter-spacing: -0.01em !important;
+                color: #111827 !important;
+                margin: 0.15rem 0 0.15rem !important;
+              }
+              .text-center span { color: #1e3a8a !important; font-weight: 700 !important; }
+              .text-center p { color: #4b5563 !important; margin: 0 0 0.25rem !important; }
+
+              /* 단계별 섹션 — 큰 폰트 + 하단 얇은 구분선 (본문은 페이지간 부드럽게 이어짐) */
+              .report-step {
+                border-bottom: 1px solid #d1d5db !important;
+                padding-bottom: 0.25rem !important;
+                margin-bottom: 1rem !important;
+                page-break-inside: auto;
+              }
+              .report-step h3 {
+                font-size: 1.1rem !important;
+                font-weight: 800 !important;
+                color: #111827 !important;
+                margin: 0.5rem 0 0.6rem !important;
+              }
+              /* 카드 항목 — 자연스러운 문맥형 리스트, 서브타이틀 굵게 + 본문 또렷하게 */
+              .report-step h4 {
+                font-size: 0.8rem !important;
+                font-weight: 700 !important;
+                color: #111827 !important;
+                margin: 0 0 0.35rem !important;
+              }
+              .report-step div { color: #111827 !important; }
+              /* 항목명 너비 고정 해제 → 어색한 글자 깨짐 방지 */
+              .report-step span { white-space: normal !important; }
+            }
           `}</style>
 
-          {/* 상단 헤더 */}
-          <header className="flex justify-between items-center mb-6 pb-4 border-b border-zinc-500/10">
-            <div className="flex items-center gap-3">
-              {headerEditingProjId === activeProject.id ? (
-                <input
-                  type="text"
-                  autoFocus
-                  value={headerTempName}
-                  onChange={(e) => setHeaderTempName(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      headerEnterCommitRef.current = true; // Enter로 커밋됨 표시 → blur가 재커밋 방지
-                      handleCommitHeaderProjectName(activeProject.id);
-                    }
-                    if (e.key === 'Escape') {
-                      headerEnterCommitRef.current = false;
-                      setHeaderEditingProjId(null);
-                    }
-                  }}
-                  onBlur={() => {
-                    // Enter 커밋 직후 따라오는 blur는 무시 (alert 중복 방지)
-                    if (headerEnterCommitRef.current) {
-                      headerEnterCommitRef.current = false;
-                      return;
-                    }
-                    handleCommitHeaderProjectName(activeProject.id);
-                  }}
-                  className={`text-xl font-bold bg-transparent border-b-2 border-blue-500 outline-none w-[350px] ${isDark ? 'text-white' : 'text-zinc-900'}`}
-                />
-              ) : (
-                <div className="flex items-center gap-3 group">
-                  <h1 className="text-xl font-bold tracking-tight cursor-pointer" onClick={() => navigateTo('kanban')}>{activeProject.name}</h1>
-                  <button
-                    onClick={() => {
-                      headerEnterCommitRef.current = false; // 새 편집 세션 시작 시 플래그 초기화
-                      setHeaderEditingProjId(activeProject.id);
-                      setHeaderTempName(activeProject.name);
+          {/* 상단 글로벌 툴바 (모든 뷰 공통 표시) */}
+          <header className="flex justify-between items-center pt-8 pb-4 border-b border-zinc-500/10">
+              <div className="flex items-center gap-3">
+                {headerEditingProjId === activeProject.id ? (
+                  <input
+                    type="text"
+                    autoFocus
+                    value={headerTempName}
+                    onChange={(e) => setHeaderTempName(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') {
+                        e.preventDefault();
+                        headerEnterCommitRef.current = true; // Enter로 커밋됨 표시 → blur가 재커밋 방지
+                        handleCommitHeaderProjectName(activeProject.id);
+                      }
+                      if (e.key === 'Escape') {
+                        headerEnterCommitRef.current = false;
+                        setHeaderEditingProjId(null);
+                      }
                     }}
-                    className="opacity-0 group-hover:opacity-100 text-xs px-2 py-1 rounded bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 transition"
-                  >
-                    {t.editName}
-                  </button>
-                  {/* 멤버 초대 버튼 추가 */}
-                  <button
-                    onClick={() => setIsInviteModalOpen(true)}
-                    className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
-                  >
-                    + 팀원 초대
-                  </button>
-                </div>
-              )}
-            </div>
+                    onBlur={() => {
+                      // Enter 커밋 직후 따라오는 blur는 무시 (alert 중복 방지)
+                      if (headerEnterCommitRef.current) {
+                        headerEnterCommitRef.current = false;
+                        return;
+                      }
+                      handleCommitHeaderProjectName(activeProject.id);
+                    }}
+                    className={`text-xl font-bold bg-transparent border-b-2 border-blue-500 outline-none w-[350px] ${isDark ? 'text-white' : 'text-zinc-900'}`}
+                  />
+                ) : (
+                  <div className="flex items-center gap-3 group">
+                    <h1 className="text-xl font-bold tracking-tight cursor-pointer" onClick={() => navigateTo('kanban')}>{activeProject.name}</h1>
+                    <button
+                      onClick={() => {
+                        headerEnterCommitRef.current = false; // 새 편집 세션 시작 시 플래그 초기화
+                        setHeaderEditingProjId(activeProject.id);
+                        setHeaderTempName(activeProject.name);
+                      }}
+                      className="opacity-0 group-hover:opacity-100 text-xs px-2 py-1 rounded bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 transition"
+                    >
+                      {t.editName}
+                    </button>
+                    {/* 멤버 초대 버튼 추가 */}
+                    <button
+                      onClick={() => setIsInviteModalOpen(true)}
+                      className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
+                    >
+                      + 팀원 초대
+                    </button>
+                  </div>
+                )}
+              </div>
 
-            <div className="flex items-center gap-3 text-xs">
-              {user && (
-                <div className="flex items-center gap-2 mr-4">
-                  <span className="opacity-70 text-[11px]">{user.email}</span>
-                  <button onClick={handleLogout} className={`px-2 py-1 rounded transition ${isDark ? 'bg-rose-500/20 text-rose-400 hover:bg-rose-500 hover:text-white' : 'bg-rose-100 text-rose-600 hover:bg-rose-500 hover:text-white'}`}>
-                    로그아웃
-                  </button>
+              <div className="flex items-center gap-3 text-xs">
+                {/* 헤더 미니 검색창 (고정 노출 · 슬림) — 이메일은 사이드바 최하단으로 이동 */}
+                <div className={`flex items-center gap-2 rounded-xl border px-2 py-1 max-w-[260px] overflow-x-auto transition ${isDark ? 'bg-zinc-900/70 border-zinc-700/60' : 'bg-white border-zinc-300 shadow-sm'}`}>
+                  <span className="text-xs opacity-50 shrink-0">🔍</span>
+                  <input
+                    type="text"
+                    value={searchKeyword}
+                    onChange={(e) => setSearchKeyword(e.target.value)}
+                    onClick={(e) => (e.target as HTMLInputElement).focus()}
+                    placeholder="카드 키워드 검색..."
+                    className={`w-32 flex-1 min-w-[100px] bg-transparent text-xs outline-none ${isDark ? 'text-white placeholder:text-zinc-500' : 'text-zinc-900 placeholder:text-zinc-400'}`}
+                  />
+                  {searchKeyword && (
+                    <button
+                      type="button"
+                      onClick={() => setSearchKeyword('')}
+                      className="text-[10px] opacity-50 hover:opacity-100 shrink-0"
+                      title="검색어 지우기"
+                    >
+                      ✕
+                    </button>
+                  )}
+                  <div className="flex items-center gap-1 shrink-0 pl-1 border-l border-zinc-500/20">
+                    <button
+                      type="button"
+                      onClick={() => setSearchTitle(!searchTitle)}
+                      className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full border transition ${
+                        searchTitle
+                          ? isDark ? 'bg-blue-600/25 text-blue-300 border-blue-500/50' : 'bg-blue-100 text-blue-700 border-blue-300'
+                          : isDark ? 'bg-zinc-800/60 text-zinc-500 border-zinc-700/60' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
+                      }`}
+                    >
+                      제목
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setSearchDesc(!searchDesc)}
+                      className={`px-1.5 py-0.5 text-[10px] font-semibold rounded-full border transition ${
+                        searchDesc
+                          ? isDark ? 'bg-blue-600/25 text-blue-300 border-blue-500/50' : 'bg-blue-100 text-blue-700 border-blue-300'
+                          : isDark ? 'bg-zinc-800/60 text-zinc-500 border-zinc-700/60' : 'bg-zinc-100 text-zinc-400 border-zinc-200'
+                      }`}
+                    >
+                      내용
+                    </button>
+                  </div>
                 </div>
-              )}
 
-              <button 
-                onClick={() => navigateTo('kanban')} 
-                className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
-              >
-                {t.kanbanView}
-              </button>
-              <button
-                onClick={() => navigateTo('report')}
-                className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'report' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
-              >
-                {t.reportView}
-              </button>
-              {canAccessShares && (
                 <button
-                  onClick={() => navigateTo('shares')}
-                  className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+                  onClick={() => navigateTo('kanban')}
+                  className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
                 >
-                  👥 공유 현황
+                  {t.kanbanView}
                 </button>
-              )}
-            </div>
-          </header>
+                <button
+                  onClick={() => navigateTo('report')}
+                  className="font-medium transition px-3 py-1.5 rounded-lg opacity-60 hover:opacity-100"
+                >
+                  {t.reportView}
+                </button>
+                {canAccessShares && (
+                  <button
+                    onClick={() => navigateTo('shares')}
+                    className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+                  >
+                    👥 공유 현황
+                  </button>
+                )}
+              </div>
+            </header>
 
           {/* 0. 폴더 인덱스(대시보드) 뷰 */}
           {viewMode === 'folder' && (
@@ -754,7 +891,8 @@ export default function Pass5MasterApp() {
 
           {/* 1. 전체 칸반 보드 뷰 */}
           {viewMode === 'kanban' && (
-            <KanbanBoard
+            <>
+              <KanbanBoard
               frameworkData={frameworkData}
               isDark={isDark}
               t={t}
@@ -791,7 +929,10 @@ export default function Pass5MasterApp() {
               setPickerTargetFieldIndex={setPickerTargetFieldIndex}
               setIsPickerOpen={setIsPickerOpen}
               onItemContextMenu={openContextMenu}
+              searchActive={isSearchActive}
+              isCardMatch={isCardMatch}
             />
+              </>
           )}
 
 
@@ -801,7 +942,7 @@ export default function Pass5MasterApp() {
             const projStore = formData[projectKey] || {};
 
             return (
-              <div className="max-w-4xl mx-auto pb-12 w-full flex flex-col gap-6">
+              <div className="max-w-4xl mx-auto mt-3 pb-12 w-full flex flex-col gap-0">
                 <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
                   <div className="flex items-center gap-3">
                     <button 
@@ -820,12 +961,12 @@ export default function Pass5MasterApp() {
                   <span className="font-bold opacity-60">{t.focusModeTitle}</span>
                 </div>
 
-                <div>
+                <div className="mt-3">
                   <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">{currentStep.stepKey} 단계 집중 조회</span>
                   <h2 className="text-xl font-black mt-0.5">{currentStep.title} — {currentStep.subtitle}</h2>
                 </div>
 
-                <div className="flex flex-col gap-6">
+                <div className="flex flex-col gap-6 mt-3">
                   {currentStep.cards.map((card) => {
                     const progress = getCardProgress(card);
                     const isCompleted = progress === 100;
@@ -834,7 +975,7 @@ export default function Pass5MasterApp() {
                     return (
                       <div 
                         key={card.id} 
-                        className={`p-6 rounded-2xl border transition ${
+                        className={`p-6 rounded-xl border transition ${
                           isCompleted
                             ? (isDark ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-emerald-50/80 border-emerald-300')
                             : (isDark ? 'bg-zinc-900/80 border-zinc-800' : 'bg-white border-zinc-200 shadow-sm')
@@ -896,7 +1037,7 @@ export default function Pass5MasterApp() {
             const cardStore = projStore[activeCardObj.id] || {};
 
             return (
-              <div className="max-w-3xl mx-auto pb-16 w-full flex flex-col gap-6">
+              <div className="max-w-4xl mx-auto mt-3 pb-16 w-full flex flex-col gap-0">
                 
                 <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
                   <div className="flex items-center gap-3">
@@ -945,7 +1086,7 @@ export default function Pass5MasterApp() {
                   </div>
                 </div>
 
-                <div className={`p-8 rounded-2xl border-t-8 ${isCompleted ? 'border-t-emerald-500' : 'border-t-blue-600'} ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
+                <div className={`mt-3 p-8 rounded-xl border-t-8 ${isCompleted ? 'border-t-emerald-500' : 'border-t-blue-600'} ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[10px] font-bold text-blue-400 uppercase tracking-widest">{activeCardStepTitle} 단계</span>
                     <span className={`text-xs font-bold px-3 py-1 rounded-full ${isCompleted ? 'bg-emerald-500/20 text-emerald-400' : 'bg-blue-500/20 text-blue-400'}`}>
@@ -1230,84 +1371,123 @@ export default function Pass5MasterApp() {
           })()}
 
 
-          {/* 4. 종합 프로젝트 정의서 뷰 */}
+          {/* 4. 종합 프로젝트 정의서 뷰 — 중앙 집중형 카드 프레임 (max-w-4xl) */}
           {viewMode === 'report' && (
-            <div className="max-w-4xl mx-auto pb-12 w-full">
-              <div className="flex justify-between items-center mb-6 text-xs">
+            <>
+              {/* 1행: 서브헤더 — 집중뷰와 동일 규격 (좌: 뒤로가기/칸반, 우: 인쇄) */}
+              <div className="max-w-4xl mx-auto w-full mt-3 flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs print:hidden">
                 <div className="flex items-center gap-3">
-                  <button 
+                  <button
                     onClick={handleGoBack}
-                    className="font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 px-3 py-1.5 rounded-xl transition"
+                    className="font-semibold text-zinc-300 hover:text-white bg-zinc-700/50 px-2.5 py-1 rounded-lg transition"
                   >
                     {t.back}
                   </button>
-                  <button 
-                    onClick={() => navigateTo('kanban')} 
-                    className="opacity-60 hover:opacity-100 font-medium text-blue-400"
+                  <button
+                    onClick={() => navigateTo('kanban')}
+                    className="font-semibold text-blue-400 hover:underline"
                   >
-                    전체 칸반(인덱스)으로 이동
+                    전체 칸반(인덱스)
                   </button>
                 </div>
                 <button
                   onClick={() => window.print()}
-                  className={`px-4 py-2 text-xs font-semibold rounded-xl transition ${isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-800'}`}
+                  className={`px-3 py-1 text-xs font-semibold rounded-lg transition ${isDark ? 'bg-zinc-800 hover:bg-zinc-700 text-zinc-200' : 'bg-zinc-200 hover:bg-zinc-300 text-zinc-800'}`}
                 >
                   {t.printPdf}
                 </button>
               </div>
 
-              <div className={`p-10 rounded-2xl border ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
-                <div className="text-center mb-10 pb-6 border-b border-zinc-500/20">
-                  <span className="text-xs font-bold text-blue-500 tracking-widest uppercase">PASS 5 FRAMEWORK SYSTEM</span>
-                  <h1 className="text-2xl font-black mt-1 mb-2">{activeProject?.name}</h1>
-                  <p className="text-xs opacity-50">종합 프로젝트 정의서 (Master Specification Document)</p>
-                </div>
-
-                <div className="flex flex-col gap-8">
-                  {frameworkData.map((col, idx) => (
-                    <div key={idx} className="pb-6 border-b border-zinc-500/10 last:border-0">
-                      <h3 className="text-sm font-bold text-blue-400 mb-4">{col.title} 단계</h3>
-                      <div className="grid grid-cols-1 gap-4">
-                        {col.cards.map((card, cIdx) => {
-                          const projStore = formData[projectKey] || {};
-                          const cardStore = projStore[card.id] || {};
-                          return (
-                            <div key={cIdx} className={`p-4 rounded-xl border ${isDark ? 'bg-zinc-800/30 border-zinc-700/40' : 'bg-zinc-200 border-zinc-200'}`}>
-                              <h4 className="text-xs font-bold mb-2 text-blue-400">{card.title}</h4>
-                              <div className="flex flex-col gap-2">
-                                {card.fields.map((f: any, fIdx: number) => {
-                                  const val = cardStore[f.id];
-                                  return (
-                                    <div key={fIdx} className="text-xs">
-                                      <span className="opacity-60 font-medium">• {f.label}: </span>
-                                      {val ? (
-                                        <span className="font-semibold">{val}</span>
-                                      ) : (
-                                        <button
-                                          type="button"
-                                          onClick={() => navigateTo('detail', { cardId: card.id })}
-                                          className="text-blue-400 hover:underline font-semibold cursor-pointer inline-flex items-center gap-1"
-                                          title="클릭하여 해당 상세 페이지로 이동"
-                                        >
-                                          (미작성) ↗
-                                        </button>
-                                      )}
-                                    </div>
-                                  );
-                                })}
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    </div>
-                  ))}
+              {/* 2행: 문서 제목 카드 */}
+              <div className="max-w-4xl mx-auto w-full mt-3">
+                <div className={`py-3 px-6 rounded-xl border print:p-0 print:border-0 print:w-full print:max-w-none ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
+                  <div className="text-center print:mb-1">
+                    <span className="text-xs font-bold text-blue-500 tracking-widest uppercase">PASS 5 FRAMEWORK SYSTEM</span>
+                    <h1 className="text-xl font-black mt-0.5 mb-1 print:mt-0 print:mb-1">{activeProject?.name}</h1>
+                    <p className="text-[11px] opacity-50 print:mb-0">종합 프로젝트 정의서 (Master Specification Document)</p>
+                  </div>
                 </div>
               </div>
-            </div>
+
+              {/* 3행: 5단계 네비게이터 — 제목 카드와 본문 카드 사이, sticky top-0, 너비 본문과 동일 (w-full max-w-4xl) */}
+              <div className="sticky top-0 z-50 mt-1 max-w-4xl mx-auto w-full print:hidden">
+                <nav className={`flex items-center gap-1.5 py-2.5 ${isDark ? 'bg-zinc-900/95' : 'bg-white/95'}`}>
+                  {frameworkData.map((col, idx) => (
+                    <button
+                      key={idx}
+                      type="button"
+                      onClick={() => document.getElementById(`report-step-${col.stepKey}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' })}
+                      className={`flex-1 text-xs font-semibold px-2 py-2 rounded-lg transition whitespace-nowrap ${
+                        isDark
+                          ? 'bg-zinc-800/60 text-zinc-300 hover:bg-blue-600 hover:text-white border border-zinc-700/50'
+                          : 'bg-zinc-100 text-zinc-600 hover:bg-blue-600 hover:text-white border border-zinc-200'
+                      }`}
+                    >
+                      {col.title}
+                    </button>
+                  ))}
+                </nav>
+                {/* 하단 그라데이션 페이드아웃 — 겹침 처리로 여백 점유 제거 */}
+                <div className={`pointer-events-none h-1.5 -mb-1.5 bg-gradient-to-b ${isDark ? 'from-zinc-900 via-zinc-900/70 to-transparent' : 'from-white via-white/70 to-transparent'}`} />
+              </div>
+
+              {/* 4행: 본문 내용 카드 — 단계별 내용 */}
+              <div className="max-w-4xl mx-auto w-full mt-1 pb-12">
+                <div className={`p-10 rounded-xl border print:p-0 print:border-0 print:w-full print:max-w-none ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
+                  <div className="flex flex-col gap-6">
+                    {frameworkData.map((col, idx) => (
+                      <div key={idx} id={`report-step-${col.stepKey}`} className="report-step pb-5 border-b border-zinc-500/10 last:border-0 scroll-mt-[72px]">
+                        <h3 className="text-sm font-bold text-blue-400 mb-3">{col.title} 단계</h3>
+                        <div className="grid grid-cols-1 gap-3">
+                          {col.cards.map((card, cIdx) => {
+                            const projStore = formData[projectKey] || {};
+                            const cardStore = projStore[card.id] || {};
+                            return (
+                              <div key={cIdx} className={`p-4 rounded-xl border ${isDark ? 'bg-zinc-800/30 border-zinc-700/40' : 'bg-zinc-50 border-zinc-200'}`}>
+                                <h4 className="text-xs font-bold mb-2 text-blue-400">{card.title}</h4>
+                                <div className="flex flex-col gap-2">
+                                  {card.fields.map((f: any, fIdx: number) => {
+                                    const val = cardStore[f.id];
+                                    return (
+                                      <div key={fIdx} className="text-xs leading-relaxed">
+                                        <span className="opacity-60 font-medium">{f.label}: </span>
+                                        {val ? (
+                                          <span className="font-semibold">{val}</span>
+                                        ) : (
+                                          <span
+                                            onClick={() => navigateTo('detail', { cardId: card.id })}
+                                            className={`cursor-pointer font-medium transition hover:text-blue-400 hover:underline ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}
+                                            title="세부 작성 페이지로 이동"
+                                          >
+                                            (미작성)
+                                          </span>
+                                        )}
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </>
           )}
 
         </main>
+
+        {/* 우측 하단 플로팅 TOP 버튼 — main 바깥(overflow 영향 없음)에 배치 (테스트: 무조건 노출) */}
+        <button
+          onClick={() => mainScrollRef.current?.scrollTo({ top: 0, behavior: 'smooth' })}
+          className="fixed bottom-6 right-6 z-50 flex flex-col items-center justify-center w-9 h-9 rounded-full bg-zinc-800/90 hover:bg-zinc-700 text-zinc-200 border border-zinc-700/80 shadow-lg backdrop-blur cursor-pointer transition print:hidden"
+        >
+          <span className="text-xs leading-none">▲</span>
+          <span className="text-[7px] font-bold leading-none mt-0.5">TOP</span>
+        </button>
       </div>
 
       {/* 5. 기존 옵션 가져오기(Picker) 모달 창 */}

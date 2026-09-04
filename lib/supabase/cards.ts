@@ -39,6 +39,12 @@ export async function createCard(
 
 // 프로젝트별 카드 목록 조회 (SELECT with project_id filter)
 export async function fetchCardsByProject(projectId: string): Promise<DatabaseCard[]> {
+  // 방어 로직: projectId가 유효하지 않으면 DB 쿼리를 실행하지 않고 빈 배열 반환
+  if (!projectId || typeof projectId !== 'string' || projectId.trim() === '') {
+    console.warn('fetchCardsByProject: 유효하지 않은 projectId로 호출됨 — 빈 배열 반환', { projectId });
+    return [];
+  }
+
   const { data, error } = await supabase
     .from('cards')
     .select('*')
@@ -46,7 +52,12 @@ export async function fetchCardsByProject(projectId: string): Promise<DatabaseCa
     .order('position', { ascending: true });
 
   if (error) {
-    console.error('Error fetching cards:', error);
+    // 에러 로깅 상세화: error 객체 전체 대신 주요 필드만 출력
+    console.error('Error fetching cards:', {
+      message: error.message,
+      details: error.details,
+      code: error.code,
+    });
     return [];
   }
 

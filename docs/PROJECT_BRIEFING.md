@@ -106,8 +106,9 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 ---
 
 ### 🔗 커밋/태그 상태
-- 최신 커밋: `6e3e0aa` `feat: Refactor share page viewer mode UI/UX and restore navigation history` (origin/main에 push 완료)
+- 최신 커밋: `f1a9dff` `docs: Add integrated project briefing and roadmap`
 - 태그: `v1.0-viewer-stable` (안정적 뷰어 버전 기준점)
+- **미커밋 작업 존재**: `app/page.tsx` 외 4개 파일(`ProjectSidebar.tsx`, `KanbanBoard.tsx`, `useCardData.ts`, `supabase/cards.ts`)에 1단계(키워드 검색/필터) 및 최근 UI/UX 개선이 커밋 전 상태로 남아 있음 — 다음 커밋 대상
 
 ---
 
@@ -115,10 +116,48 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 
 | 단계 | 기능 | 상태 |
 |---|---|---|
-| **1단계** | **인덱스 키워드 검색 및 카드 필터링** — 전체 프로젝트·카드·필드를 키워드로 검색하고 결과로 카드를 필터링 | 🔜 **현재 진행할 차례** |
-| **2단계** | **상단 전체 진행률 프로그레스 바 UI** — 프로젝트 전반의 종합 진행률을 상단 고정 바에 시각화 | ⬜ 대기 |
+| **1단계** | **인덱스 키워드 검색 및 카드 필터링** — 전체 프로젝트·카드·필드를 키워드로 검색하고 결과로 카드를 필터링 | ✅ **구현 완료** |
+| **2단계** | **상단 전체 진행률 프로그레스 바 UI** — 프로젝트 전반의 종합 진행률을 상단 고정 바에 시각화 | 🔜 **다음 차례** |
 | **3단계** | **프로젝트 오너 권한 승계 기능** — 오너가 다른 멤버에게 소유권을 이양하는 기능 | ⬜ 대기 |
 | **4단계** | **세부 페이지 다중 옵션 선택 기능** — 카드 상세에서 여러 옵션을 동시에 선택/표시 | ⬜ 대기 |
 | **5단계** | **호버/토글 기반 파이프라인 SVG 연결선 UI** — 5단계 칸반을 파이프라인 연결선으로 시각화 | ⬜ 대기 |
 
-> 1단계(인덱스 키워드 검색 및 카드 필터링)가 현재 진행할 차례입니다. 다음 세션은 이 기능 구현부터 시작할 것.
+> 1단계(인덱스 키워드 검색 및 카드 필터링)는 **구현 완료** 상태이나 아직 미커밋. 다음은 2단계(프로그레스 바 UI) 작업 예정.
+
+### ✅ 1단계 구현 상세: 키워드 검색 및 카드 필터링
+
+**구현 위치**: `app/page.tsx` + `components/KanbanBoard.tsx`
+
+**상태 관리** (`page.tsx` lines 46-60):
+```ts
+const [searchKeyword, setSearchKeyword] = useState('');      // 검색 입력값
+const [searchTitle, setSearchTitle] = useState(true);         // 제목 검색 토글
+const [searchDesc, setSearchDesc] = useState(true);           // 내용 검색 토글
+const normalizedSearchKeyword = searchKeyword.trim().toLowerCase();
+const isSearchActive = normalizedSearchKeyword.length > 0;
+
+const isCardMatch = useCallback((card: Card) => {
+  if (!isSearchActive) return true;
+  const inTitle = searchTitle && card.title.toLowerCase().includes(normalizedSearchKeyword);
+  const inDesc = searchDesc && card.desc.toLowerCase().includes(normalizedSearchKeyword);
+  return inTitle || inDesc;
+}, [isSearchActive, normalizedSearchKeyword, searchTitle, searchDesc]);
+```
+
+**검색 UI** (`page.tsx` lines 793-833): 글로벌 헤더 내 검색 인풋 + 클리어 버튼 + `제목`/`내용` 토글 버튼
+
+**KanbanBoard 연동** (`page.tsx` lines 932-933): `searchActive={isSearchActive}`, `isCardMatch={isCardMatch}` props 전달 → 미일치 카드 반투명 디밍 + 일치 카드 강조 하이라이트 (`KanbanBoard.tsx` lines 172-195)
+
+---
+
+### 🎨 최근 UI/UX 개선 내역 (1단계 이후, 미커밋)
+
+| 개선 항목 | 상세 |
+|---|---|
+| **글로벌 헤더 통일** | 모든 뷰에서 상단 글로벌 헤더(`Pass5 | project-name` + 종합 정의서/공유 버튼) 상시 노출. 보고서 뷰 조건부 숨김 제거 |
+| **서브헤더·컨테이너 박스 디자인 통일** | 집중뷰·상세뷰·종합정의서 3개 뷰의 서브헤더, 박스 border-radius(`rounded-xl`), 너비(`max-w-4xl`) 일관 적용 |
+| **곡률(border-radius) 정돈** | 제목 카드(`rounded-xl`), 본문 카드(`rounded-xl`), 네비게이터(`rounded-lg`) 곡률 계층 정리 |
+| **네비게이터 위아래 수직 여백 조정** | 상단 `mt-1`, 하단 그래디언트 `h-1.5 -mb-1.5`(실제 공간 차지 없이 시각적 페이드아웃) |
+| **(미작성) 클릭 링크** | 종합 정의서에서 미작성 필드 `(미작성)` 클릭 시 해당 카드 상세 페이지(`detail` 뷰)로 즉시 이동 |
+| **TOP(최상단 이동) 버튼** | 우측 하단 고정 플로팅 버튼(`fixed bottom-6 right-6`), 스크롤 300px 초과 시 표시, 클릭 시 `scrollTo({ top: 0, behavior: 'smooth' })`. `main`을 스크롤 컨테이너로 사용하므로 버튼은 `main` 바깥에 위치 |
+| **스크롤바 레이아웃 시프트 방지** | `scrollbar-gutter: stable`을 `<main>`에 인라인 적용으로 스크롤바 생성 시 글로벌 헤더 좌우 밀림 차단 |

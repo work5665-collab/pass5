@@ -42,6 +42,9 @@ interface KanbanBoardProps {
   onItemContextMenu?: (e: React.MouseEvent, target: { type: 'card'; id: string; name: string }) => void;
   // 읽기 전용 모드 (카드 추가/수정/삭제/드래그 비활성화)
   readOnly?: boolean;
+  // 검색 강조/Dimming (1단계) — 선택 사항, 미제공 시 비활성
+  searchActive?: boolean;
+  isCardMatch?: (card: Card) => boolean;
 }
 
 export default function KanbanBoard({
@@ -82,6 +85,8 @@ export default function KanbanBoard({
   setIsPickerOpen,
   onItemContextMenu,
   readOnly = false,
+  searchActive = false,
+  isCardMatch,
 }: KanbanBoardProps) {
   return (
     <div className="flex-1 flex flex-col">
@@ -164,6 +169,10 @@ export default function KanbanBoard({
                   const progress = getCardProgress(card);
                   const isCompleted = progress === 100;
                   const isEditingMeta = editingCardId === card.id;
+                  // 검색 강조/Dimming (1단계)
+                  const isMatch = isCardMatch ? isCardMatch(card) : true;
+                  const isDimmed = searchActive && !isMatch;
+                  const isHighlighted = searchActive && isMatch;
 
                   return (
                     <div
@@ -177,6 +186,12 @@ export default function KanbanBoard({
                         isCompleted
                           ? (isDark ? 'bg-emerald-950/20 border-emerald-500/40' : 'bg-emerald-50/80 border-emerald-300')
                           : (isDark ? 'bg-zinc-800/60 border-zinc-700/50 text-zinc-200' : 'bg-white border-zinc-200 text-zinc-800 shadow-xs')
+                      } ${isDimmed ? 'opacity-30' : ''} ${
+                        isHighlighted
+                          ? isDark
+                            ? 'ring-2 ring-blue-500/70 border-blue-500/70'
+                            : 'ring-2 ring-blue-400 border-blue-400'
+                          : ''
                       }`}
                     >
                       {isEditingMeta ? (
