@@ -880,8 +880,8 @@ export default function Pass5MasterApp() {
               </div>
             </header>
 
-          {/* 전체 진행률 프로그레스 바 */}
-          {activeProject && (
+          {/* 전체 진행률 프로그레스 바 (칸반 뷰 전용) */}
+          {activeProject && viewMode === 'kanban' && (
             <div className={`flex items-center gap-3 py-2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
               <span className="text-xs font-medium shrink-0">전체 진행률</span>
               <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>

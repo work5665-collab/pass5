@@ -122,7 +122,7 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 | **4단계** | **세부 페이지 다중 옵션 선택 기능** — 카드 상세에서 여러 옵션을 동시에 선택/표시 | ⬜ 대기 |
 | **5단계** | **호버/토글 기반 파이프라인 SVG 연결선 UI** — 5단계 칸반을 파이프라인 연결선으로 시각화 | ⬜ 대기 |
 
-> 1단계·2단계 모두 **구현 완료** 상태. 다음은 3단계(프로젝트 오너 권한 승계) 작업 예정.
+> 1단계·2단계 모두 **구현 완료** 상태. **다음 진행 과제: 3단계(프로젝트 오너 권한 승계 기능)**
 
 ### ✅ 1단계 구현 상세: 키워드 검색 및 카드 필터링
 
@@ -185,7 +185,7 @@ const projectProgress = useMemo(() => {
 }, [formData, projectKey, frameworkData]);
 ```
 
-**프로그레스 바 JSX** (`page.tsx` lines 883-897): 글로벌 헤더(`</header>`) 바로 아래, 모든 뷰에서 공통 표시
+**프로그레스 바 JSX** (`page.tsx` lines 883-897): 글로벌 헤더(`</header>`) 바로 아래, **칸반 뷰 전용** 표시
 
 - **위치**: `<header>` 하단 border-b와 콘텐츠 영역 사이
 - **높이**: `h-1.5` (6px) `rounded-full`
