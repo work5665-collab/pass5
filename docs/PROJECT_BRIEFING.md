@@ -117,12 +117,12 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 | 단계 | 기능 | 상태 |
 |---|---|---|
 | **1단계** | **인덱스 키워드 검색 및 카드 필터링** — 전체 프로젝트·카드·필드를 키워드로 검색하고 결과로 카드를 필터링 | ✅ **구현 완료** |
-| **2단계** | **상단 전체 진행률 프로그레스 바 UI** — 프로젝트 전반의 종합 진행률을 상단 고정 바에 시각화 | 🔜 **다음 차례** |
+| **2단계** | **상단 전체 진행률 프로그레스 바 UI** — 프로젝트 전반의 종합 진행률을 상단 고정 바에 시각화 | ✅ **구현 완료** |
 | **3단계** | **프로젝트 오너 권한 승계 기능** — 오너가 다른 멤버에게 소유권을 이양하는 기능 | ⬜ 대기 |
 | **4단계** | **세부 페이지 다중 옵션 선택 기능** — 카드 상세에서 여러 옵션을 동시에 선택/표시 | ⬜ 대기 |
 | **5단계** | **호버/토글 기반 파이프라인 SVG 연결선 UI** — 5단계 칸반을 파이프라인 연결선으로 시각화 | ⬜ 대기 |
 
-> 1단계(인덱스 키워드 검색 및 카드 필터링)는 **구현 완료** 상태이나 아직 미커밋. 다음은 2단계(프로그레스 바 UI) 작업 예정.
+> 1단계·2단계 모두 **구현 완료** 상태. 다음은 3단계(프로젝트 오너 권한 승계) 작업 예정.
 
 ### ✅ 1단계 구현 상세: 키워드 검색 및 카드 필터링
 
@@ -161,3 +161,37 @@ const isCardMatch = useCallback((card: Card) => {
 | **(미작성) 클릭 링크** | 종합 정의서에서 미작성 필드 `(미작성)` 클릭 시 해당 카드 상세 페이지(`detail` 뷰)로 즉시 이동 |
 | **TOP(최상단 이동) 버튼** | 우측 하단 고정 플로팅 버튼(`fixed bottom-6 right-6`), 스크롤 300px 초과 시 표시, 클릭 시 `scrollTo({ top: 0, behavior: 'smooth' })`. `main`을 스크롤 컨테이너로 사용하므로 버튼은 `main` 바깥에 위치 |
 | **스크롤바 레이아웃 시프트 방지** | `scrollbar-gutter: stable`을 `<main>`에 인라인 적용으로 스크롤바 생성 시 글로벌 헤더 좌우 밀림 차단 |
+
+### ✅ 2단계 구현 상세: 상단 전체 진행률 프로그레스 바 UI
+
+**구현 위치**: `app/page.tsx`
+
+**데이터 계산** (`page.tsx` lines 471-486):
+```ts
+const projectProgress = useMemo(() => {
+  const projStore = formData[projectKey] || {};
+  let totalFields = 0;
+  let filledFields = 0;
+  frameworkData.forEach(step => {
+    step.cards.forEach(card => {
+      const cardStore = projStore[card.id] || {};
+      card.fields.forEach(f => {
+        totalFields++;
+        if (cardStore[f.id] && cardStore[f.id].trim() !== '') filledFields++;
+      });
+    });
+  });
+  return totalFields === 0 ? 0 : Math.round((filledFields / totalFields) * 100);
+}, [formData, projectKey, frameworkData]);
+```
+
+**프로그레스 바 JSX** (`page.tsx` lines 883-897): 글로벌 헤더(`</header>`) 바로 아래, 모든 뷰에서 공통 표시
+
+- **위치**: `<header>` 하단 border-b와 콘텐츠 영역 사이
+- **높이**: `h-1.5` (6px) `rounded-full`
+- **색상**: 미완료 `bg-blue-500` / 100% 완료 시 `bg-emerald-500`
+- **애니메이션**: `transition-all duration-500 ease-out`
+- **퍼센트 텍스트**: `tabular-nums` 숫자 폭 고정 + `w-10 text-right`
+- **라벨**: "전체 진행률" 왼쪽 고정
+- **조건**: `activeProject`가 있을 때만 표시 (폴더 인덱스 뷰에서는 숨김)
+- **클라이언트 전용**: `formData`는 localStorage 기반이므로 프로그레스 바도 클라이언트 전용

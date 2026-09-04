@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import InviteModal from './components/InviteModal';
 import ShareModal, { ShareTarget } from './components/ShareModal';
 import ContextMenu from './components/ContextMenu';
@@ -468,6 +468,23 @@ export default function Pass5MasterApp() {
     setNewFieldOptionsStr,
   });
 
+  // 프로젝트 전체 진행률 계산 (총 필드 대비 채워진 필드 비율)
+  const projectProgress = useMemo(() => {
+    const projStore = formData[projectKey] || {};
+    let totalFields = 0;
+    let filledFields = 0;
+    frameworkData.forEach(step => {
+      step.cards.forEach(card => {
+        const cardStore = projStore[card.id] || {};
+        card.fields.forEach(f => {
+          totalFields++;
+          if (cardStore[f.id] && cardStore[f.id].trim() !== '') filledFields++;
+        });
+      });
+    });
+    return totalFields === 0 ? 0 : Math.round((filledFields / totalFields) * 100);
+  }, [formData, projectKey, frameworkData]);
+
   const currentCardIndex = allFlattenedCards.findIndex(item => item.card.id === activeCardId);
   const prevCardItem = currentCardIndex > 0 ? allFlattenedCards[currentCardIndex - 1] : null;
   const nextCardItem = currentCardIndex < allFlattenedCards.length - 1 ? allFlattenedCards[currentCardIndex + 1] : null;
@@ -862,6 +879,22 @@ export default function Pass5MasterApp() {
                 )}
               </div>
             </header>
+
+          {/* 전체 진행률 프로그레스 바 */}
+          {activeProject && (
+            <div className={`flex items-center gap-3 py-2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+              <span className="text-xs font-medium shrink-0">전체 진행률</span>
+              <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+                <div
+                  className={`h-full rounded-full transition-all duration-500 ease-out ${
+                    projectProgress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
+                  }`}
+                  style={{ width: `${projectProgress}%` }}
+                />
+              </div>
+              <span className="text-xs font-semibold tabular-nums shrink-0 w-10 text-right">{projectProgress}%</span>
+            </div>
+          )}
 
           {/* 0. 폴더 인덱스(대시보드) 뷰 */}
           {viewMode === 'folder' && (
