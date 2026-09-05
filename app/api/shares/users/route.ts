@@ -24,10 +24,14 @@ export async function GET(request: NextRequest) {
     // 1) 요청자가 Owner/Admin 인 프로젝트 (= 관리 가능한 프로젝트)
     const { data: memberProjects } = await supabaseAdmin
       .from('project_members')
-      .select('project_id')
+      .select('project_id, role')
       .eq('user_id', user.id)
       .in('role', ['owner', 'admin']);
     const memberProjectIds = (memberProjects || []).map((m: any) => m.project_id);
+    // 소유권 이양 노출 판정: 현재 사용자가 해당 프로젝트의 실제 owner 인 프로젝트 집합
+    const ownerProjectIdSet = new Set(
+      (memberProjects || []).filter((m: any) => m.role === 'owner').map((m: any) => m.project_id)
+    );
 
     // 레거시 데이터 대응: 사용자가 생성한 프로젝트도 관리 대상에 포함 (403/표시 누락 방지)
     const { data: createdProjects } = await supabaseAdmin
@@ -49,14 +53,28 @@ export async function GET(request: NextRequest) {
       .select('id, folder_id')
       .in('id', manageableProjectIds);
     const directFolderIds = [...new Set((projRows || []).map((p: any) => p.folder_id).filter(Boolean))];
+    // 부모 폴더 id → 직속 프로젝트 id 매핑 (폴더 공유 대상의 project_id 역조회용)
+    const projectIdByFolder = new Map<string, string>();
+    for (const p of projRows || []) {
+      if (p.folder_id) projectIdByFolder.set(p.folder_id, p.id);
+    }
     let manageableFolderIds: string[] = [];
+    const parentOfFolder: Record<string, string> = {};
     if (directFolderIds.length > 0) {
       const { data: childFolders } = await supabaseAdmin
         .from('folders')
-        .select('id')
+        .select('id, parent_id')
         .in('parent_id', directFolderIds);
+      for (const f of childFolders || []) parentOfFolder[f.id] = f.parent_id;
       manageableFolderIds = [...directFolderIds, ...(childFolders || []).map((f: any) => f.id)];
     }
+    // 폴더 id → 소속 프로젝트 id (직속 or 하위 2단계), 소속 없으면 null
+    const resolveProjectId = (folderId: string): string | null => {
+      if (projectIdByFolder.has(folderId)) return projectIdByFolder.get(folderId)!;
+      const parent = parentOfFolder[folderId];
+      if (parent && projectIdByFolder.has(parent)) return projectIdByFolder.get(parent)!;
+      return null;
+    };
 
     // 3) 관리 대상 아이템(프로젝트/폴더)의 공유 조회
     let allShares: any[] = [];
@@ -98,6 +116,17 @@ export async function GET(request: NextRequest) {
     for (const share of allShares) {
       const isFolder = share.target_type === 'folder';
       const nameMap = isFolder ? folderName : projectName;
+      // 폴더 공유 대상은 소속 프로젝트 id 역조회 (없으면 null → 이양 불가)
+      const projectId = isFolder ? resolveProjectId(share.target_id) : share.target_id;
+      const presentIsOwner = !!projectId && ownerProjectIdSet.has(projectId);
+      const isUserShare = share.share_method === 'user';
+      // 이양 가능 조건: 프로젝트 공유 + 현재 사용자가 해당 프로젝트 owner + 수락 완료(user_id) + 본인 아님
+      const presentCanTransfer =
+        isUserShare &&
+        !isFolder &&
+        !!share.user_id &&
+        share.user_id !== user.id &&
+        presentIsOwner;
       const entry = {
         id: share.id,
         target_type: share.target_type,
@@ -109,6 +138,12 @@ export async function GET(request: NextRequest) {
         created_at: share.created_at,
         share_method: share.share_method,
         link_token: share.share_method === 'link' ? share.link_token : null,
+        user_id: share.user_id ?? null,
+        project_id: projectId,
+        email: isUserShare ? (share.email || '') : '',
+        name: isUserShare ? (share.name || null) : null,
+        present_user_is_owner: presentIsOwner,
+        present_user_can_transfer: presentCanTransfer,
       };
       if (share.share_method === 'link') {
         linkShares.push(entry);

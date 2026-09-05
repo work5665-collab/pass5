@@ -110,7 +110,7 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 ### 🔗 커밋/태그 상태
 - 직전 커밋: `cfaf08e` `feat & refactor: PGRST303 재시도·ViewScaffold 뷰 통일·필드값 영속화·AI 추천·헤더 안정화` (그 앞 `df7bd43` 2단계 진행률 바, `463d991` 1단계 검색/필터)
 - 태그: `v1.0-viewer-stable` (안정적 뷰어 버전 기준점)
-- **이번 브리핑 커밋**: 아래 "🛠️ 최근 적용 내역"의 작업(PGRST303 재시도 / ViewScaffold 뷰 통일 / 필드값 영속화 / AI 추천 버튼 / 헤더·스크롤바 안정화)이 이 문서와 함께 커밋·push됨
+- **이번 브리핑 커밋**: `feat: 프로젝트 소유권 넘기기 기능 구현, UI 용어 개선 및 문서 업데이트` — 3단계 구현(`/api/members/transfer-owner` + 공유 현황 '오너' 메뉴)과 아래 3단계 상세의 UI 용어 개선, DB Clean-up을 함께 커밋·push함
 - **배포 상태**: GitHub(work5665-collab/pass5) — Vercel 사이트 연동 자동 배포로 main push 시 Production 배포가 트리거됨. 최신 배포(`cfaf08e`)는 **Vercel 빌드 완료 + deployment success** 확인됨. 단 배포 인스턴스 URL은 계정 SSO/배포 보호 상태라 비인증 접근은 로그인용 `vercel.com/sso-api`로 리다이렉트됨.
 
 ---
@@ -121,11 +121,11 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 |---|---|---|
 | **1단계** | **인덱스 키워드 검색 및 카드 필터링** — 전체 프로젝트·카드·필드를 키워드로 검색하고 결과로 카드를 필터링 | ✅ **구현 완료** |
 | **2단계** | **상단 전체 진행률 프로그레스 바 UI** — 프로젝트 전반의 종합 진행률을 상단 고정 바에 시각화 | ✅ **구현 완료** |
-| **3단계** | **프로젝트 오너 권한 승계 기능** — 오너가 다른 멤버에게 소유권을 이양하는 기능 | ⬜ 대기 |
+| **3단계** | **프로젝트 오너 권한 승계 기능** — 오너가 다른 멤버에게 소유권을 넘기는 기능 | ✅ **구현 완료** |
 | **4단계** | **세부 페이지 다중 옵션 선택 기능** — 카드 상세에서 여러 옵션을 동시에 선택/표시 | ⬜ 대기 |
 | **5단계** | **호버/토글 기반 파이프라인 SVG 연결선 UI** — 5단계 칸반을 파이프라인 연결선으로 시각화 | ⬜ 대기 |
 
-> 1단계·2단계 모두 **구현 완료** 상태. **다음 진행 과제: 3단계(프로젝트 오너 권한 승계 기능)**
+> 1~3단계 모두 **구현 완료** 상태. **다음 진행 과제: 4단계(세부 페이지 다중 옵션 선택 기능)**
 
 ### ✅ 1단계 구현 상세: 키워드 검색 및 카드 필터링
 
@@ -197,3 +197,32 @@ const projectProgress = useMemo(() => {
 - **라벨**: "전체 진행률" 왼쪽 고정
 - **조건**: `activeProject`가 있을 때만 표시 (폴더 인덱스 뷰에서는 숨김)
 - **클라이언트 전용**: `formData`는 localStorage 기반이므로 프로그레스 바도 클라이언트 전용
+
+---
+
+### ✅ 3단계 구현 상세: 프로젝트 오너 권한 승계 (소유권 넘기기)
+
+**배경**: 프로젝트를 실제 소유(관리)할 멤버를 변경할 수 있는 기능. 오너가 다른 멤버에게 소유권을 넘기면 본인은 `관리자(Admin)`로 강등된다.
+
+#### 기능 개요
+
+| 영역 | 상세 |
+|---|---|
+| **백엔드 API** | `app/api/members/transfer-owner/route.ts` — `POST /api/members/transfer-owner` (`{projectId, newOwnerUserId}`). 요청자(owner 검증) → **service role(RLS 우회)** 로 3건 안전 일괄 업데이트: ① `projects.created_by = newOwnerUserId`, ② 기존 오너 row `role: owner → admin`, ③ 신규 오너 row `role → owner` |
+| **UI 통합** | `app/components/SharesView.tsx` — **공유 현황** 페이지 권한 드롭다운에 '오너' 메뉴 통합. 노출 조건: 현재 사용자가 해당 프로젝트의 **owner** + 초대 수락 완료(`user_id` 존재)된 다른 멤버 행 (정산은 서버 측 `/api/shares/users` 응답의 `present_user_can_transfer` 필드로 계산) |
+| **이양 판정 메타데이터** | `/api/shares/users` 응답 확장 — `user_id`, `project_id`(폴더 대상은 소속 프로젝트 역조회), `email`, `name`, `present_user_is_owner`, `present_user_can_transfer` |
+
+#### UI UX 용어 개선 (직관적 '넘기기' 표현 통일)
+
+- 드롭다운 메뉴 옵션: `👑 오너 (Owner)`
+- 모달 타이틀: **`👑 프로젝트 소유권 넘기기`**
+- 본문 문구: **"[이름]님에게 프로젝트 소유권을 넘기시겠습니까? 완료되면 본인의 권한은 '관리자(Admin)'로 변경됩니다."**
+- 실행 버튼: **[소유권 넘기기]**
+- 성공 알림: **"소유권이 성공적으로 넘겨졌습니다."**
+- 이후 공유 현황 목록 자동 재조회, 기존 오너는 '오너' 옵션 노출 중단(Admin로 전환)
+
+#### 검증 및 정리
+
+- **DB Clean-up 완료**: 테스트 프로젝트(`[테스트] 소유권 이양 검증용`) · project_members · item_shares · 가상 멤버 auth 유저 **전부 0건** 검증 완료 (잔존물 없음)
+- **임시 스크립트 삭제 완료**: `scripts/ui_setup/`(`01_find_user.cjs` · `02_setup.cjs` · `03_cleanup.cjs` · `state.json`) 및 빈 `scripts/` 디렉토리 제거 → git 작업 트리 내 테스트 흔적 0건
+- **빌드 검증**: `npm run build` 성공 — TypeScript 컴파일 · 13개 페이지/라우트 정적 생성 통과

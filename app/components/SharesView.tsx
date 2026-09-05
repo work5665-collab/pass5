@@ -17,6 +17,13 @@ interface ShareEntry {
   created_at: string;
   share_method: 'user' | 'link';
   link_token: string | null;
+  // 소유권 넘기기 판단용 (서버 계산)
+  user_id: string | null;      // 초대 수락 완료 여부 (null 이면 미수락/링크)
+  project_id: string | null;   // 이 공유가 속한 프로젝트 (폴더 대상은 역조회, 무소속이면 null)
+  email: string;
+  name: string | null;
+  present_user_is_owner: boolean;      // 현재 사용자가 해당 프로젝트의 owner 인가
+  present_user_can_transfer: boolean;  // 이 행에서 '오너' 옵션 노출 가능한가
 }
 
 interface ShareGroup {
@@ -61,6 +68,10 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
   // 저장 전 대기 중인 역할 변경 (shareId -> newRole)
   const [draftRoles, setDraftRoles] = useState<Record<string, Role>>({});
   const [busyId, setBusyId] = useState<string | null>(null);
+
+  // 소유권 넘기기 (2차 확인 모달)
+  const [transferTarget, setTransferTarget] = useState<ShareEntry | null>(null);
+  const [transferBusy, setTransferBusy] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -313,6 +324,44 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
     }
   };
 
+  // [오너 선택] → 2차 확인 모달 → [소유권 넘기기] → POST transfer-owner + 목록 재조회
+  const handleTransferOwner = async () => {
+    if (!transferTarget) return;
+    setTransferBusy(true);
+    try {
+      const res = await authFetch('/api/members/transfer-owner', {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: transferTarget.project_id,
+          newOwnerUserId: transferTarget.user_id,
+        }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        alert('소유권이 성공적으로 넘겨졌습니다.');
+        setTransferTarget(null);
+        await loadShares();
+      } else {
+        alert(data.error || '소유권 넘기기에 실패했습니다.');
+        setTransferTarget(null);
+      }
+    } catch {
+      alert('소유권 넘기기에 실패했습니다.');
+      setTransferTarget(null);
+    } finally {
+      setTransferBusy(false);
+    }
+  };
+
+  // 권한 select 에서 '오너' 선택 시 (일반 role 저장이 아닌) 소유권 넘기기 확인 모달로 분기
+  const handleRoleSelect = (share: ShareEntry, value: string) => {
+    if (value === 'owner') {
+      setTransferTarget(share);
+      return;
+    }
+    setDraftRoles(prev => ({ ...prev, [share.id]: value as Role }));
+  };
+
   const targetIcon = (share: ShareEntry) => (share.target_type === 'folder' ? '📁' : '🗂️');
 
   const toggleExpand = (key: string) => {
@@ -494,7 +543,7 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
             <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
               <select
                 value={currentRole}
-                onChange={e => setDraftRoles(prev => ({ ...prev, [share.id]: e.target.value as Role }))}
+                onChange={e => handleRoleSelect(share, e.target.value)}
                 disabled={busy}
                 onClick={e => e.stopPropagation()}
                 className={`text-[11px] px-1.5 py-0.5 rounded border bg-transparent outline-none cursor-pointer font-medium ${
@@ -504,6 +553,9 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
                 {ROLE_OPTIONS.map(opt => (
                   <option key={opt.value} value={opt.value}>{opt.label}</option>
                 ))}
+                {share.present_user_can_transfer && (
+                  <option value="owner">👑 오너 (Owner)</option>
+                )}
               </select>
               <button
                 onClick={e => { e.stopPropagation(); handleSaveRole(share); }}
@@ -703,6 +755,44 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
             '링크를 아는 사용자 누구나 접근 가능 · 보기 전용입니다.',
             [{ key: 'link', title: '오픈 링크 공유', icon: '🔗', shares: linkShares, groupName: '', groupDepartment: '', group: { email: '', name: '', department: '', shares: linkShares } }]
           )}
+        </div>
+      )}
+
+      {/* 소유권 넘기기 2차 확인 모달 */}
+      {transferTarget && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-black/60" onClick={() => !transferBusy && setTransferTarget(null)} />
+          <div className={`relative w-full max-w-md rounded-2xl border p-6 shadow-2xl ${
+            isDark ? 'bg-zinc-900 border-zinc-700' : 'bg-white border-zinc-200'
+          }`}>
+            <h3 className="text-base font-black mb-3">👑 프로젝트 소유권 넘기기</h3>
+            <p className="text-sm leading-relaxed mb-6">
+              <span className="font-bold">{transferTarget.name || transferTarget.email}</span>
+              님에게 프로젝트 소유권을 넘기시겠습니까?
+              <br />
+              완료되면 본인의 권한은 <span className="font-bold">'관리자(Admin)'</span>로 변경됩니다.
+            </p>
+            <div className="flex justify-end gap-2">
+              <button
+                onClick={() => setTransferTarget(null)}
+                disabled={transferBusy}
+                className={`text-sm px-4 py-2 rounded-lg font-semibold transition disabled:opacity-40 ${
+                  isDark ? 'bg-zinc-700 text-zinc-200 hover:bg-zinc-600' : 'bg-zinc-200 text-zinc-700 hover:bg-zinc-300'
+                }`}
+              >
+                취소
+              </button>
+              <button
+                onClick={handleTransferOwner}
+                disabled={transferBusy}
+                className={`text-sm px-4 py-2 rounded-lg font-semibold text-white transition disabled:opacity-40 ${
+                  isDark ? 'bg-rose-600 hover:bg-rose-500' : 'bg-rose-600 hover:bg-rose-500'
+                }`}
+              >
+                {transferBusy ? '처리 중...' : '소유권 넘기기'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </ViewScaffold>

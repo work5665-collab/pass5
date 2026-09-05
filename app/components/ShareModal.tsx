@@ -399,7 +399,8 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
             <div className="mt-5">
               <div className={`text-xs font-bold opacity-60 uppercase tracking-wider mb-2`}>공유 목록</div>
               <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-                {shares.map(share => (
+                {shares.map(share => {
+                  return (
                   <div
                     key={share.id}
                     className={`flex items-center justify-between p-2.5 rounded-lg text-xs ${isDark ? 'bg-zinc-800/60' : 'bg-zinc-50'}`}
@@ -436,18 +437,22 @@ export default function ShareModal({ isOpen, onClose, target, isDark }: ShareMod
                         </div>
                       </div>
                     </div>
-                    <button
-                      onClick={() => handleDelete(share.id)}
-                      className={`shrink-0 ml-2 px-2 py-1 rounded ${isDark ? 'text-zinc-500 hover:text-rose-400 hover:bg-zinc-700' : 'text-zinc-400 hover:text-rose-600 hover:bg-zinc-200'}`}
-                      title="공유 삭제"
-                    >
-                      ✕
-                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        onClick={() => handleDelete(share.id)}
+                        className={`px-2 py-1 rounded ${isDark ? 'text-zinc-500 hover:text-rose-400 hover:bg-zinc-700' : 'text-zinc-400 hover:text-rose-600 hover:bg-zinc-200'}`}
+                        title="공유 삭제"
+                      >
+                        ✕
+                      </button>
+                    </div>
                   </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
+
         </div>
       </div>
     </div>
