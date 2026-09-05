@@ -26,7 +26,7 @@
 
 | 라우트 | 종류 | 설명 |
 |---|---|---|
-| `/` | page | **메인 앱** (`app/page.tsx`, ~1540줄) — 구글 로그인 필수. `Pass5MasterApp`이 모든 UI를 인라인 JSX로 보유 |
+| `/` | page | **메인 앱** (`app/page.tsx`, ~1800줄) — 구글 로그인 필수. `Pass5MasterApp`이 모든 UI를 인라인 JSX로 보유 |
 | `/share/[token]` | page | **읽기 전용 공유 뷰어** — 로그인 불필요, 공유 링크로 열람. 메인 레이아웃(사이드바+칸반) 재사용 |
 | `/invite/[token]` | page | 이메일 초대 수락 페이지 |
 | `/api/share/[token]/data` | API | 공유 데이터 조회 (service role, 익명 허용) — 프로젝트/폴더 + 카드 구조 반환 |
@@ -83,6 +83,8 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 
 **⚠️ 상태 값 저장 방식**: 카드 필드의 **선택값은 DB가 아니라 사용자별 localStorage에 저장**됨. 익명 뷰어는 선택값을 볼 수 없음 → 공유 페이지에서는 `fields[].options`의 첫 비어있지 않은 값을 선택값으로 표시.
 
+**✅ 영속화 구현 (`useFieldValuePersistence`)**: `lib/hooks/useFieldValuePersistence.ts` — formData(`projectId → cardId → fieldId → value`)를 `pass5_field_values_v1:<userId>` 키에 로드/500ms 디바운스 저장. 새로고침 시 입력값 유지, 로그아웃 시 메모리 비움(계정 간 값 누출 방지). 복원 완료 전에는 저장을 건너뛰어 빈 `{}`로 실데이터를 덮어쓰는 것을 방지.
+
 ---
 
 ## 4. 주요 기능 및 권한 체계
@@ -106,9 +108,9 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 ---
 
 ### 🔗 커밋/태그 상태
-- 최신 커밋: `f1a9dff` `docs: Add integrated project briefing and roadmap`
+- 직전 커밋: `df7bd43` `feat: 2단계 상단 전체 진행률 프로그레스 바 UI 구현 및 칸반 뷰 제한 완료` (그 앞 `463d991` 1단계 검색/필터, `12a94ba` 진행률 바)
 - 태그: `v1.0-viewer-stable` (안정적 뷰어 버전 기준점)
-- **미커밋 작업 존재**: `app/page.tsx` 외 4개 파일(`ProjectSidebar.tsx`, `KanbanBoard.tsx`, `useCardData.ts`, `supabase/cards.ts`)에 1단계(키워드 검색/필터) 및 최근 UI/UX 개선이 커밋 전 상태로 남아 있음 — 다음 커밋 대상
+- **이번 브리핑 커밋**: 아래 "🛠️ 최근 적용 내역"의 작업(PGRST303 재시도 / ViewScaffold 뷰 통일 / 필드값 영속화 / AI 추천 버튼 / 헤더·스크롤바 안정화)이 이 문서와 함께 커밋·push됨
 
 ---
 
@@ -150,17 +152,16 @@ const isCardMatch = useCallback((card: Card) => {
 
 ---
 
-### 🎨 최근 UI/UX 개선 내역 (1단계 이후, 미커밋)
+### 🛠️ 최근 적용 내역 (이번 커밋 대상 작업)
 
-| 개선 항목 | 상세 |
+| 작업 | 상세 |
 |---|---|
-| **글로벌 헤더 통일** | 모든 뷰에서 상단 글로벌 헤더(`Pass5 | project-name` + 종합 정의서/공유 버튼) 상시 노출. 보고서 뷰 조건부 숨김 제거 |
-| **서브헤더·컨테이너 박스 디자인 통일** | 집중뷰·상세뷰·종합정의서 3개 뷰의 서브헤더, 박스 border-radius(`rounded-xl`), 너비(`max-w-4xl`) 일관 적용 |
-| **곡률(border-radius) 정돈** | 제목 카드(`rounded-xl`), 본문 카드(`rounded-xl`), 네비게이터(`rounded-lg`) 곡률 계층 정리 |
-| **네비게이터 위아래 수직 여백 조정** | 상단 `mt-1`, 하단 그래디언트 `h-1.5 -mb-1.5`(실제 공간 차지 없이 시각적 페이드아웃) |
-| **(미작성) 클릭 링크** | 종합 정의서에서 미작성 필드 `(미작성)` 클릭 시 해당 카드 상세 페이지(`detail` 뷰)로 즉시 이동 |
-| **TOP(최상단 이동) 버튼** | 우측 하단 고정 플로팅 버튼(`fixed bottom-6 right-6`), 스크롤 300px 초과 시 표시, 클릭 시 `scrollTo({ top: 0, behavior: 'smooth' })`. `main`을 스크롤 컨테이너로 사용하므로 버튼은 `main` 바깥에 위치 |
-| **스크롤바 레이아웃 시프트 방지** | `scrollbar-gutter: stable`을 `<main>`에 인라인 적용으로 스크롤바 생성 시 글로벌 헤더 좌우 밀림 차단 |
+| **PGRST303 자동 재시도** | `lib/supabase/retry.ts` — "JWT issued at future"(인증/API 서버 시계 오차, 일시적) 발생 시 400ms 대기 후 최대 2회 재시도(총 3회). `runSupabaseQuery(() => …)`로 **데이터 계층의 모든 쿼리 사이트**에 적용(`useProjectData.ts`, `supabase/cards.ts`, `supabase/folders.ts`); 소진 후에만 알림/콘솔 노출. `error.ts`의 `describeSupabaseError`로 에러 메시지 정규화(빈 `{}` 방지) |
+| **ViewScaffold 뷰 레이아웃 통일** | `app/components/ViewScaffold.tsx` — 6개 뷰(칸반/포커스/카드상세/종합정의서/공유/폴더)의 상단부를 공통 틀로 추출. full-bleed 고정 높이 서브바(`mt-4` + `h-11 sm:h-12`) + 본문만 `max-w-4xl mx-auto`(칸반은 `wide`=전체 폭). 뷰 전환 시 '헤더+서브바' 계층이 픽셀 단위로 동일해 세로 튀김(덜컹거림) 제거. 칸반 진행률 바도 서브바 안으로 이동 |
+| **필드값 localStorage 영속화** | `lib/hooks/useFieldValuePersistence.ts` — formData를 `pass5_field_values_v1:<userId>`에 로드/500ms 디바운스 저장. 새로고침 시 입력 유지, 로그아웃 시 초기화(계정 간 누출 방지) |
+| **AI 추천 버튼** | `app/components/AIRecommendButton.tsx` — 카드 상세 필드 우측 '✨ AI 추천'. 프로젝트명+필드 라벨 기반 3개 추천값 팝오버(외부 클릭/ESC 닫기), 선택 시 해당 필드에 자동 입력(기존 옵션이면 SELECT, 아니면 CUSTOM + 제출). 현재 mock — API 연동 시 `generateMockSuggestions` 교체 지점 |
+| **헤더/스크롤바 안정화** | `<header>` `w-full overflow-hidden` + 좌측 제목 `min-w-0 flex-1` + `truncate`, 우측 컨트롤 `flex-nowrap shrink-0` 고정 → 사이드바 열림 시 가로 스크롤·버튼 겹침 제거. `<main>`에 `overflow-x-hidden` + `scrollbar-gutter: stable`(스크롤바 생성 시 헤더 좌우 밀림 방지). [종합정의서] 버튼 활성 상태(`viewMode==='report'`) 파란 하이라이트 정상화 |
+| **종합정의서 세로 여백 리듬** | 서브바 ↔ 문서타이틀 `mt-3`(12px), 문서타이틀 ↔ 네비게이터 ↔ 본문카드 `gap-2`(8px), 네비게이터 내부 `py-1.5`(6px) — '요소 간 바깥 여백' 기준으로 대칭적인 compact 리듬 정리 |
 
 ### ✅ 2단계 구현 상세: 상단 전체 진행률 프로그레스 바 UI
 
@@ -185,7 +186,7 @@ const projectProgress = useMemo(() => {
 }, [formData, projectKey, frameworkData]);
 ```
 
-**프로그레스 바 JSX** (`page.tsx` lines 883-897): 글로벌 헤더(`</header>`) 바로 아래, **칸반 뷰 전용** 표시
+**프로그레스 바 JSX**: 칸반 뷰의 `<ViewScaffold subBar={...}>` 서브바 밴드에 배치(글로벌 헤더 바로 아래, **칸반 뷰 전용** 표시)
 
 - **위치**: `<header>` 하단 border-b와 콘텐츠 영역 사이
 - **높이**: `h-1.5` (6px) `rounded-full`

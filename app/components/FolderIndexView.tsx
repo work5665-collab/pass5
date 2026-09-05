@@ -3,6 +3,7 @@
 import React from 'react';
 import { Folder, Project, DictType, ViewMode } from '../../lib/types';
 import type { ShareTarget } from './ShareModal';
+import ViewScaffold from './ViewScaffold';
 
 interface FolderIndexViewProps {
   folders: Folder[];
@@ -33,9 +34,9 @@ export default function FolderIndexView({
 
   if (!folder) {
     return (
-      <div className="max-w-4xl mx-auto pb-12 w-full">
+      <ViewScaffold className="pb-12">
         <div className="text-xs opacity-60">폴더를 선택해주세요.</div>
-      </div>
+      </ViewScaffold>
     );
   }
 
@@ -48,9 +49,10 @@ export default function FolderIndexView({
     } ${hover ? (isDark ? 'hover:bg-zinc-800/60 hover:border-zinc-600' : 'hover:bg-zinc-50 hover:border-zinc-300') : ''}`;
 
   return (
-    <div className="max-w-4xl mx-auto pb-12 w-full flex flex-col gap-6">
-      {/* 상단 네비게이션 */}
-      <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
+    <ViewScaffold
+      className="gap-6 pb-12"
+      subBar={(
+        <div className="w-full h-full flex justify-between items-center gap-3 px-3 bg-zinc-500/10 rounded-xl text-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={handleGoBack}
@@ -74,6 +76,8 @@ export default function FolderIndexView({
           </span>
         </div>
       </div>
+      )}
+    >
 
       {/* 폴더 제목 */}
       <div className="flex items-start justify-between">
@@ -156,6 +160,6 @@ export default function FolderIndexView({
           </div>
         )}
       </div>
-    </div>
+    </ViewScaffold>
   );
 }

@@ -15,8 +15,11 @@ import { useProjectData } from '../lib/hooks/useProjectData';
 import { useFolderData } from '../lib/hooks/useFolderData';
 import { useCardData } from '../lib/hooks/useCardData';
 import { useFieldInteraction } from '../lib/hooks/useFieldInteraction';
+import { useFieldValuePersistence } from '../lib/hooks/useFieldValuePersistence';
 import FolderIndexView from './components/FolderIndexView';
 import SharesView from './components/SharesView';
+import ViewScaffold from './components/ViewScaffold';
+import AIRecommendButton from './components/AIRecommendButton';
 
 export default function Pass5MasterApp() {
   const [user, setUser] = useState<any>(null);
@@ -455,6 +458,7 @@ export default function Pass5MasterApp() {
     handleStartEditOption,
     handleCustomSubmit,
     handleResetFieldValue,
+    updateFormValue,
     getCardProgress,
     handleApplyPickedOptions,
     helperToggleOption,
@@ -467,6 +471,10 @@ export default function Pass5MasterApp() {
     setNewCardFields,
     setNewFieldOptionsStr,
   });
+
+  // 카드 필드값 사용자별 localStorage 영속화 (새로고침 시 값 유지)
+  // - 의도된 설계: 필드값은 DB가 아닌 사용자별 localStorage에 저장
+  useFieldValuePersistence(formData, setFormData, user?.id);
 
   // 프로젝트 전체 진행률 계산 (총 필드 대비 채워진 필드 비율)
   const projectProgress = useMemo(() => {
@@ -672,7 +680,7 @@ export default function Pass5MasterApp() {
 
 
         {/* 메인 콘텐츠 영역 */}
-        <main ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`relative flex-1 flex flex-col px-8 pb-8 overflow-y-auto print:h-auto print:overflow-visible print:p-0 ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
+        <main ref={mainScrollRef} style={{ scrollbarGutter: 'stable' }} className={`relative flex-1 flex flex-col px-8 pb-8 overflow-y-auto overflow-x-hidden print:h-auto print:overflow-visible print:p-0 ${isDark ? 'bg-[#18181b]' : 'bg-[#fafaf9]'}`}>
           
           <style>{`
             ::-webkit-scrollbar {
@@ -756,8 +764,8 @@ export default function Pass5MasterApp() {
           `}</style>
 
           {/* 상단 글로벌 툴바 (모든 뷰 공통 표시) */}
-          <header className="flex justify-between items-center pt-8 pb-4 border-b border-zinc-500/10">
-              <div className="flex items-center gap-3">
+          <header className="flex w-full overflow-hidden justify-between items-center gap-1.5 md:gap-3 pt-8 pb-4 border-b border-zinc-500/10">
+              <div className="flex items-center gap-1.5 sm:gap-2 md:gap-3 min-w-0 flex-1 overflow-hidden">
                 {headerEditingProjId === activeProject.id ? (
                   <input
                     type="text"
@@ -783,35 +791,32 @@ export default function Pass5MasterApp() {
                       }
                       handleCommitHeaderProjectName(activeProject.id);
                     }}
-                    className={`text-xl font-bold bg-transparent border-b-2 border-blue-500 outline-none w-[350px] ${isDark ? 'text-white' : 'text-zinc-900'}`}
+                    className={`text-xl font-bold bg-transparent border-b-2 border-blue-500 outline-none w-[160px] sm:w-[240px] md:w-[350px] max-w-full min-w-0 ${isDark ? 'text-white' : 'text-zinc-900'}`}
                   />
                 ) : (
-                  <div className="flex items-center gap-3 group">
-                    <h1 className="text-xl font-bold tracking-tight cursor-pointer" onClick={() => navigateTo('kanban')}>{activeProject.name}</h1>
+                  <div className="inline-flex items-center gap-2.5 group min-w-0">
+                    <h1
+                      className="text-xl font-bold tracking-tight cursor-pointer truncate min-w-0"
+                      onClick={() => navigateTo('kanban')}
+                      title={activeProject.name}
+                    >{activeProject.name}</h1>
                     <button
                       onClick={() => {
                         headerEnterCommitRef.current = false; // 새 편집 세션 시작 시 플래그 초기화
                         setHeaderEditingProjId(activeProject.id);
                         setHeaderTempName(activeProject.name);
                       }}
-                      className="opacity-0 group-hover:opacity-100 text-xs px-2 py-1 rounded bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 transition"
+                      className="hidden group-hover:inline-flex text-xs px-2 py-1 rounded bg-zinc-800/40 hover:bg-zinc-800 text-zinc-400 transition whitespace-nowrap shrink-0 items-center"
                     >
                       {t.editName}
-                    </button>
-                    {/* 멤버 초대 버튼 추가 */}
-                    <button
-                      onClick={() => setIsInviteModalOpen(true)}
-                      className="ml-2 text-xs px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
-                    >
-                      + 팀원 초대
                     </button>
                   </div>
                 )}
               </div>
 
-              <div className="flex items-center gap-3 text-xs">
+              <div className="flex flex-nowrap shrink-0 items-center justify-end gap-1 text-xs min-w-0 overflow-hidden">
                 {/* 헤더 미니 검색창 (고정 노출 · 슬림) — 이메일은 사이드바 최하단으로 이동 */}
-                <div className={`flex items-center gap-2 rounded-xl border px-2 py-1 max-w-[260px] overflow-x-auto transition ${isDark ? 'bg-zinc-900/70 border-zinc-700/60' : 'bg-white border-zinc-300 shadow-sm'}`}>
+                <div className={`flex items-center gap-1 rounded-xl border px-2 py-1 min-w-0 shrink transition ${isDark ? 'bg-zinc-900/70 border-zinc-700/60' : 'bg-white border-zinc-300 shadow-sm'}`}>
                   <span className="text-xs opacity-50 shrink-0">🔍</span>
                   <input
                     type="text"
@@ -819,7 +824,7 @@ export default function Pass5MasterApp() {
                     onChange={(e) => setSearchKeyword(e.target.value)}
                     onClick={(e) => (e.target as HTMLInputElement).focus()}
                     placeholder="카드 키워드 검색..."
-                    className={`w-32 flex-1 min-w-[100px] bg-transparent text-xs outline-none ${isDark ? 'text-white placeholder:text-zinc-500' : 'text-zinc-900 placeholder:text-zinc-400'}`}
+                    className={`w-24 sm:w-32 min-w-0 bg-transparent text-xs outline-none ${isDark ? 'text-white placeholder:text-zinc-500' : 'text-zinc-900 placeholder:text-zinc-400'}`}
                   />
                   {searchKeyword && (
                     <button
@@ -831,7 +836,7 @@ export default function Pass5MasterApp() {
                       ✕
                     </button>
                   )}
-                  <div className="flex items-center gap-1 shrink-0 pl-1 border-l border-zinc-500/20">
+                  <div className="hidden md:flex items-center gap-1 shrink-0 pl-1 border-l border-zinc-500/20">
                     <button
                       type="button"
                       onClick={() => setSearchTitle(!searchTitle)}
@@ -859,42 +864,33 @@ export default function Pass5MasterApp() {
 
                 <button
                   onClick={() => navigateTo('kanban')}
-                  className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+                  className={`font-medium transition text-xs px-2 py-1 rounded-lg whitespace-nowrap ${viewMode === 'kanban' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
                 >
                   {t.kanbanView}
                 </button>
                 <button
                   onClick={() => navigateTo('report')}
-                  className="font-medium transition px-3 py-1.5 rounded-lg opacity-60 hover:opacity-100"
+                  className={`font-medium transition text-xs px-2 py-1 rounded-lg whitespace-nowrap ${viewMode === 'report' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
                 >
                   {t.reportView}
                 </button>
                 {canAccessShares && (
                   <button
                     onClick={() => navigateTo('shares')}
-                    className={`font-medium transition px-3 py-1.5 rounded-lg ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
+                    className={`font-medium transition text-xs px-2 py-1 rounded-lg whitespace-nowrap ${viewMode === 'shares' ? 'bg-blue-600 text-white' : 'opacity-60 hover:opacity-100'}`}
                   >
                     👥 공유 현황
                   </button>
                 )}
+                {/* 멤버 초대 — 공유/협업 기능과 함께 우측 컨트롤 영역으로 이동 */}
+                <button
+                  onClick={() => setIsInviteModalOpen(true)}
+                  className="font-medium transition text-xs px-2 py-1 rounded-lg whitespace-nowrap shrink-0 bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold"
+                >
+                  + 팀원 초대
+                </button>
               </div>
             </header>
-
-          {/* 전체 진행률 프로그레스 바 (칸반 뷰 전용) */}
-          {activeProject && viewMode === 'kanban' && (
-            <div className={`flex items-center gap-3 py-2 ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
-              <span className="text-xs font-medium shrink-0">전체 진행률</span>
-              <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
-                <div
-                  className={`h-full rounded-full transition-all duration-500 ease-out ${
-                    projectProgress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
-                  }`}
-                  style={{ width: `${projectProgress}%` }}
-                />
-              </div>
-              <span className="text-xs font-semibold tabular-nums shrink-0 w-10 text-right">{projectProgress}%</span>
-            </div>
-          )}
 
           {/* 0. 폴더 인덱스(대시보드) 뷰 */}
           {viewMode === 'folder' && (
@@ -924,7 +920,23 @@ export default function Pass5MasterApp() {
 
           {/* 1. 전체 칸반 보드 뷰 */}
           {viewMode === 'kanban' && (
-            <>
+            <ViewScaffold
+              wide
+              subBar={activeProject ? (
+                <div className={`w-full h-full flex items-center gap-3 text-xs ${isDark ? 'text-zinc-400' : 'text-zinc-500'}`}>
+                  <span className="text-xs font-medium shrink-0">전체 진행률</span>
+                  <div className={`flex-1 h-1.5 rounded-full overflow-hidden ${isDark ? 'bg-zinc-800' : 'bg-zinc-200'}`}>
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ease-out ${
+                        projectProgress === 100 ? 'bg-emerald-500' : 'bg-blue-500'
+                      }`}
+                      style={{ width: `${projectProgress}%` }}
+                    />
+                  </div>
+                  <span className="text-xs font-semibold tabular-nums shrink-0 w-10 text-right">{projectProgress}%</span>
+                </div>
+              ) : null}
+            >
               <KanbanBoard
               frameworkData={frameworkData}
               isDark={isDark}
@@ -965,7 +977,7 @@ export default function Pass5MasterApp() {
               searchActive={isSearchActive}
               isCardMatch={isCardMatch}
             />
-              </>
+            </ViewScaffold>
           )}
 
 
@@ -975,8 +987,10 @@ export default function Pass5MasterApp() {
             const projStore = formData[projectKey] || {};
 
             return (
-              <div className="max-w-4xl mx-auto mt-3 pb-12 w-full flex flex-col gap-0">
-                <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
+              <ViewScaffold
+                className="pb-12"
+                subBar={(
+                  <div className="w-full h-full flex justify-between items-center gap-3 px-3 bg-zinc-500/10 rounded-xl text-xs">
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={handleGoBack}
@@ -993,6 +1007,8 @@ export default function Pass5MasterApp() {
                   </div>
                   <span className="font-bold opacity-60">{t.focusModeTitle}</span>
                 </div>
+                )}
+              >
 
                 <div className="mt-3">
                   <span className="text-xs font-bold text-blue-500 uppercase tracking-wider">{currentStep.stepKey} 단계 집중 조회</span>
@@ -1058,7 +1074,7 @@ export default function Pass5MasterApp() {
                     );
                   })}
                 </div>
-              </div>
+            </ViewScaffold>
             );
           })()}
 
@@ -1070,9 +1086,10 @@ export default function Pass5MasterApp() {
             const cardStore = projStore[activeCardObj.id] || {};
 
             return (
-              <div className="max-w-4xl mx-auto mt-3 pb-16 w-full flex flex-col gap-0">
-                
-                <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
+              <ViewScaffold
+                className="pb-16"
+                subBar={(
+                  <div className="w-full h-full flex justify-between items-center gap-3 px-3 bg-zinc-500/10 rounded-xl text-xs">
                   <div className="flex items-center gap-3">
                     <button 
                       onClick={handleGoBack}
@@ -1118,6 +1135,8 @@ export default function Pass5MasterApp() {
                     )}
                   </div>
                 </div>
+                )}
+              >
 
                 <div className={`mt-3 p-8 rounded-xl border-t-8 ${isCompleted ? 'border-t-emerald-500' : 'border-t-blue-600'} ${isDark ? 'bg-zinc-900 border-zinc-800' : 'bg-white border-zinc-200 shadow-xl'}`}>
                   <div className="flex justify-between items-center mb-1">
@@ -1234,6 +1253,28 @@ export default function Pass5MasterApp() {
                                 ))}
                                 <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
                               </select>
+
+                              <AIRecommendButton
+                                projectName={activeProject?.name || ''}
+                                fieldLabel={field.label}
+                                isDark={isDark}
+                                onSelect={(val) => {
+                                  // 추천값이 기존 옵션에 있으면 select 모드, 없으면 custom 모드로 전환 후 입력
+                                  const allOpts = getFieldOptions(field, activeCardObj.id);
+                                  if (allOpts.includes(val)) {
+                                    setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }));
+                                    updateFormValue(activeCardObj.id, field.id, val);
+                                  } else {
+                                    setFieldModes(prev => ({ ...prev, [field.id]: 'CUSTOM' }));
+                                    setCustomInputs(prev => ({ ...prev, [field.id]: val }));
+                                    // custom submit 자동 호출 → SELECT 모드 복귀
+                                    setTimeout(() => {
+                                      handleCustomSubmit(activeCardObj.id, field.id, false);
+                                      setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }));
+                                    }, 80);
+                                  }
+                                }}
+                              />
 
                               {currentVal && !isCustomMode && !isEditMode && (
                                 <button
@@ -1399,16 +1440,17 @@ export default function Pass5MasterApp() {
                     </div>
                   </div>
                 </div>
-              </div>
+            </ViewScaffold>
             );
           })()}
 
 
           {/* 4. 종합 프로젝트 정의서 뷰 — 중앙 집중형 카드 프레임 (max-w-4xl) */}
           {viewMode === 'report' && (
-            <>
-              {/* 1행: 서브헤더 — 집중뷰와 동일 규격 (좌: 뒤로가기/칸반, 우: 인쇄) */}
-              <div className="max-w-4xl mx-auto w-full mt-3 flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs print:hidden">
+            <ViewScaffold
+              className="gap-2 pb-12"
+              subBar={(
+                <div className="w-full h-full flex justify-between items-center gap-3 px-3 bg-zinc-500/10 rounded-xl text-xs print:hidden">
                 <div className="flex items-center gap-3">
                   <button
                     onClick={handleGoBack}
@@ -1430,9 +1472,11 @@ export default function Pass5MasterApp() {
                   {t.printPdf}
                 </button>
               </div>
+              )}
+            >
 
-              {/* 2행: 문서 제목 카드 */}
-              <div className="max-w-4xl mx-auto w-full mt-3">
+              {/* 2행: 문서 제목 카드 — 서브바와 12px(mt-3) 간격 */}
+              <div className="mt-3">
                 <div className={`py-3 px-6 rounded-xl border print:p-0 print:border-0 print:w-full print:max-w-none ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
                   <div className="text-center print:mb-1">
                     <span className="text-xs font-bold text-blue-500 tracking-widest uppercase">PASS 5 FRAMEWORK SYSTEM</span>
@@ -1443,8 +1487,8 @@ export default function Pass5MasterApp() {
               </div>
 
               {/* 3행: 5단계 네비게이터 — 제목 카드와 본문 카드 사이, sticky top-0, 너비 본문과 동일 (w-full max-w-4xl) */}
-              <div className="sticky top-0 z-50 mt-1 max-w-4xl mx-auto w-full print:hidden">
-                <nav className={`flex items-center gap-1.5 py-2.5 ${isDark ? 'bg-zinc-900/95' : 'bg-white/95'}`}>
+              <div className="sticky top-0 z-50 w-full print:hidden">
+                <nav className={`flex items-center gap-1.5 py-1.5 ${isDark ? 'bg-zinc-900/95' : 'bg-white/95'}`}>
                   {frameworkData.map((col, idx) => (
                     <button
                       key={idx}
@@ -1465,7 +1509,7 @@ export default function Pass5MasterApp() {
               </div>
 
               {/* 4행: 본문 내용 카드 — 단계별 내용 */}
-              <div className="max-w-4xl mx-auto w-full mt-1 pb-12">
+              <div>
                 <div className={`p-10 rounded-xl border print:p-0 print:border-0 print:w-full print:max-w-none ${isDark ? 'bg-zinc-900/90 border-zinc-800' : 'bg-white shadow-xl border-zinc-200'}`}>
                   <div className="flex flex-col gap-6">
                     {frameworkData.map((col, idx) => (
@@ -1508,7 +1552,7 @@ export default function Pass5MasterApp() {
                   </div>
                 </div>
               </div>
-            </>
+            </ViewScaffold>
           )}
 
         </main>

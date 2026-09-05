@@ -1,0 +1,276 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>영상 PD의 막막함</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,600;0,9..144,700;1,9..144,600;1,9..144,700&family=Instrument+Sans:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root{
+    --bg:#F6F3EE; --surface:#FFFFFF; --surface-2:#EFEBE3;
+    --ink:#211F24; --muted:#6F6A72; --line:#E2DDD2;
+    --accent:#3B5BDB; --accent-ink:#FFFFFF;
+    --amber:#E39B3B; --pos:#2E9E68; --neg:#D84C5B;
+    --slate-a:#3B5BDB; --slate-b:#211F24;
+  }
+  @media (prefers-color-scheme: dark){
+    :root:not([data-theme="light"]){
+      --bg:#17171B; --surface:#1F1F25; --surface-2:#26262E;
+      --ink:#EFEDE8; --muted:#9C98A4; --line:#2E2E38;
+      --accent:#8A9FF5; --accent-ink:#10121C;
+      --amber:#EEB45C; --pos:#54C68B; --neg:#EF6A76;
+      --slate-a:#8A9FF5; --slate-b:#2E2E38;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#17171B; --surface:#1F1F25; --surface-2:#26262E;
+    --ink:#EFEDE8; --muted:#9C98A4; --line:#2E2E38;
+    --accent:#8A9FF5; --accent-ink:#10121C;
+    --amber:#EEB45C; --pos:#54C68B; --neg:#EF6A76;
+    --slate-a:#8A9FF5; --slate-b:#2E2E38;
+  }
+  *{box-sizing:border-box}
+  body{
+    margin:0; background:var(--bg); color:var(--ink);
+    font-family:"Instrument Sans",-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Noto Sans KR",sans-serif;
+    font-size:16px; line-height:1.6;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:920px; margin:0 auto; padding:56px 24px 96px}
+  /* clapperboard slate divider — the subject's own instrument */
+  .slate{
+    height:22px; border-radius:4px; overflow:hidden; margin:26px 0 34px;
+    background:
+      repeating-linear-gradient(-45deg, var(--slate-a) 0 14px, var(--surface) 14px 28px);
+    box-shadow:0 1px 0 var(--line);
+  }
+  .slate.tight{margin:30px 0 22px}
+  .eyebrow{
+    font-family:"IBM Plex Mono",monospace; font-size:11px; letter-spacing:.18em;
+    text-transform:uppercase; color:var(--accent); font-weight:600; margin:0 0 14px;
+  }
+  h1{
+    font-family:"Fraunces",serif; font-weight:700; font-size:clamp(30px,5.4vw,48px);
+    line-height:1.05; letter-spacing:-.01em; margin:0; text-wrap:balance;
+  }
+  .thesis{
+    font-family:"Fraunces",serif; font-style:italic; font-weight:600;
+    font-size:clamp(19px,3vw,24px); line-height:1.4; color:var(--muted);
+    margin:20px 0 0; max-width:30em; text-wrap:balance;
+  }
+  .meta{font-size:12.5px; color:var(--muted); margin-top:22px; display:flex; flex-wrap:wrap; gap:6px 16px}
+  .meta b{color:var(--ink); font-weight:600}
+  /* verdict tiles */
+  .tiles{display:grid; grid-template-columns:repeat(auto-fit,minmax(200px,1fr)); gap:14px; margin-top:8px}
+  .tile{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:20px 20px 18px}
+  .tile .k{font-size:12px; font-weight:600; letter-spacing:.02em; color:var(--muted)}
+  .tile .big{font-family:"IBM Plex Mono",monospace; font-size:44px; font-weight:600; line-height:1; margin:10px 0 6px; font-variant-numeric:tabular-nums}
+  .tile .big em{font-style:normal; font-size:18px; color:var(--muted)}
+  .tile .tag{display:inline-block; font-size:11px; font-weight:600; padding:2px 9px; border-radius:99px}
+  .tile .note{font-size:12.5px; color:var(--muted); margin-top:8px}
+  .t-bar{height:6px; border-radius:99px; background:var(--surface-2); overflow:hidden; margin-top:10px}
+  .t-bar i{display:block; height:100%; border-radius:99px}
+  .pos{color:var(--pos)} .neg{color:var(--neg)} .amber{color:var(--amber)}
+  .tag.pos{background:color-mix(in srgb,var(--pos) 16%,transparent); color:var(--pos)}
+  .tag.neg{background:color-mix(in srgb,var(--neg) 16%,transparent); color:var(--neg)}
+  .tag.amber{background:color-mix(in srgb,var(--amber) 18%,transparent); color:var(--amber)}
+  /* sections */
+  h2{
+    font-family:"Fraunces",serif; font-weight:700; font-size:24px; letter-spacing:-.01em;
+    margin:0 0 4px; text-wrap:balance;
+  }
+  h2 .no{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:500; color:var(--accent); letter-spacing:.1em; display:block; margin-bottom:8px}
+  .sec-head{margin-bottom:18px}
+  .lede{font-size:14.5px; color:var(--muted); margin:0; max-width:42em}
+  section{margin-top:64px}
+  /* callout */
+  .callout{background:var(--surface); border:1px solid var(--line); border-left:4px solid var(--amber); border-radius:12px; padding:20px 22px; margin-top:26px}
+  .callout .lbl{font-size:11px; font-weight:700; letter-spacing:.14em; text-transform:uppercase; color:var(--amber); font-family:"IBM Plex Mono",monospace}
+  .callout p{font-size:15px; margin:8px 0 0; max-width:52em}
+  .callout p b{color:var(--ink)}
+  /* walkthrough steps */
+  .step{border:1px solid var(--line); border-radius:14px; padding:0; margin-bottom:16px; overflow:hidden; background:var(--surface)}
+  .step-head{display:flex; align-items:center; gap:14px; padding:16px 20px; background:var(--surface-2); border-bottom:1px solid var(--line)}
+  .step-no{font-family:"IBM Plex Mono",monospace; font-size:13px; font-weight:600; color:var(--accent); letter-spacing:.05em; flex-shrink:0}
+  .step-title{font-weight:700; font-size:15.5px; margin:0}
+  .step-title span{font-weight:500; color:var(--muted); font-size:13px}
+  .step-body{padding:18px 20px; display:grid; gap:14px}
+  .row{display:grid; grid-template-columns:64px 1fr; gap:14px}
+  .row .lbl{font-family:"IBM Plex Mono",monospace; font-size:10.5px; font-weight:600; letter-spacing:.1em; text-transform:uppercase; padding-top:3px; color:var(--muted)}
+  .row p{margin:0; font-size:14.5px}
+  .row p b{font-weight:600}
+  .flag{font-size:13.5px; color:var(--neg); margin:0; border-left:3px solid var(--neg); padding:4px 0 4px 12px}
+  .flag b{font-weight:600}
+  /* findings list */
+  .findings{display:grid; gap:10px; margin-top:8px}
+  .finding{display:grid; grid-template-columns:auto 1fr; gap:14px; background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px 18px}
+  .finding .rank{font-family:"IBM Plex Mono",monospace; font-weight:600; color:var(--accent); font-size:15px; padding-top:2px}
+  .finding h3{font-size:15px; margin:0 0 4px; font-weight:700}
+  .finding p{margin:0; font-size:13.5px; color:var(--muted)}
+  .finding.top{border-color:var(--amber); border-left-width:4px; box-shadow:0 4px 18px color-mix(in srgb,var(--amber) 14%,transparent)}
+  .finding.top .rank{color:var(--amber)}
+  .why{margin-top:10px; padding-top:10px; border-top:1px dashed var(--line); font-size:12.5px; color:var(--muted)}
+  .why b{color:var(--ink)}
+  /* method / table */
+  table{width:100%; border-collapse:collapse; font-size:13.5px; margin-top:6px}
+  th,td{text-align:left; padding:10px 12px; border-bottom:1px solid var(--line); vertical-align:top}
+  th{font-family:"IBM Plex Mono",monospace; font-size:10.5px; letter-spacing:.08em; text-transform:uppercase; color:var(--muted); font-weight:600}
+  td b{font-weight:600}
+  .chip{display:inline-block; font-size:11px; font-weight:600; padding:2px 9px; border-radius:99px; background:var(--surface-2); border:1px solid var(--line); color:var(--muted)}
+  .footer{margin-top:70px; padding-top:20px; border-top:1px solid var(--line); font-size:12px; color:var(--muted)}
+  .footer p{margin:3px 0}
+  .kbd{font-family:"IBM Plex Mono",monospace; font-size:11px; background:var(--surface-2); border:1px solid var(--line); border-bottom-width:2px; border-radius:5px; padding:0 5px}
+  @media (max-width:560px){
+    .row{grid-template-columns:1fr}
+    .row .lbl{padding-top:0}
+  }
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important; animation:none !important}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="eyebrow">PASS5 · AI 브라우저 에이전트 UX 테스트 리포트</div>
+  <h1>영상 PD의 막막함</h1>
+  <p class="thesis">클라이언트가 “테스트 홍보 영상 A 제작” 한 줄만 남기고 떠났을 때 — Pass5는 그 PD의 첫 15분을 얼마나 잘 안내하는가.</p>
+  <div class="slate"></div>
+  <div class="meta">
+    <span><b>페르소나</b> 홍보영상 기획·제작 PD</span>
+    <span><b>시나리오</b> 프로젝트 진입 → Input 작성 → 뷰 전환</span>
+    <span><b>방법</b> 소스 코드 워크스루 · 로컬 렌더 확인</span>
+    <span><b>일자</b> 2026-09-04</span>
+  </div>
+
+  <!-- verdict -->
+  <div class="tiles">
+    <div class="tile">
+      <div class="k">입력 장벽</div>
+      <div class="big">8<span> / 10</span></div>
+      <span class="tag neg">막막함 높음</span>
+      <div class="t-bar"><i class="neg" style="width:80%; background:var(--neg)"></i></div>
+      <div class="note">프레임워크가 소프트웨어 전용 템플릿이라 영상 PD에게 선택지가 하나도 안 맞음</div>
+    </div>
+    <div class="tile">
+      <div class="k">동선 매끄러움</div>
+      <div class="big">8<span> / 10</span></div>
+      <span class="tag pos">직관적</span>
+      <div class="t-bar"><i class="pos" style="width:80%; background:var(--pos)"></i></div>
+      <div class="note">칸반·집중·상세·종합정의서 이동과 (미작성) 링크·TOP 버튼 모두 양호</div>
+    </div>
+    <div class="tile">
+      <div class="k">AI 가이드 시급도</div>
+      <div class="big">9<span> / 10</span></div>
+      <span class="tag amber">현재 AI 기능 전무</span>
+      <div class="t-bar"><i class="amber" style="width:90%; background:var(--amber)"></i></div>
+      <div class="note">Input 필드 작성 화면이 최우선 삽입 지점 — 기획 공수 최대 감소 지점</div>
+    </div>
+  </div>
+
+  <div class="callout">
+    <div class="lbl">핵심 결론</div>
+    <p>가장 큰 장벽은 UI 조작이 아니라 <b>콘텐츠 불일치</b>다. PASS 5 프레임워크의 15개 카드·26개 필드는 전부 “Vercel 배포 · MVP · 오픈소스 · 깃허브 커밋 · KPI 시간단축” 같은 <b>소프트웨어·기술 프로젝트 전용</b>으로 하드코딩되어 있다. 홍보영상 PD는 거의 모든 질문에서 무관한 선택지를 버리고 “직접 입력”을 강제당한다. 그리고 이 앱에는 <b>AI 추천·가이드 기능이 전혀 없다</b>. 드롭다운 선택지 + 주관식 입력 + “기존 옵션 가져오기”뿐이다. 초반 공수를 줄이려는 사용자 요구와 정면으로 배치된다.</p>
+  </div>
+
+  <!-- walkthrough -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="no">SCENARIO</span>페르소나 여정 워크스루</h2>
+      <p class="lede">PD가 “테스트 홍보 영상 A 제작” 프로젝트를 만들고 Input 단계를 채우고 뷰를 오가는 실제 경로를, 렌더링되는 코드를 따라 재구성했다.</p>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">STEP 1</span><p class="step-title">프로젝트 진입 <span>— “테스트 홍보 영상 A 제작”</span></p></div>
+      <div class="step-body">
+        <div class="row"><div class="lbl">의도</div><p>막연한 한 줄 의뢰를 들고 프로젝트를 시작한다.</p></div>
+        <div class="row"><div class="lbl">실제 동작</div><p>사이드바 <b>“새 프로젝트”</b> → 이름만 입력 → 자동 선택 + 칸반 진입. 진입 자체는 <b>매우 빠르고 쉽다</b>. 그러나 프로젝트 생성 시 <b>업종·도메인(영상 제작)을 묻는 단계가 없어</b>, 템플릿은 그대로 소프트웨어 전용으로 로드된다. 이 시점부터 PD는 “이 질문들이 내 홍보영상과 무슨 상관이지?”라는 막막함을 안고 시작한다.</p></div>
+        <p class="flag"><b>문제:</b> 진입 장벽은 낮지만, 잘못된 프레임워크가 이미 선택되어 있어 이후 모든 입력이 어긋난다. 도메인 설정의 기회를 놓치는 지점.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">STEP 2</span><p class="step-title">Input — “목적과 문제 정의” 카드 작성 <span>핵심 난관</span></p></div>
+      <div class="step-body">
+        <div class="row"><div class="lbl">의도</div><p>초반 입력 공수를 최소화하고, 막막할 때 가이드를 받고 싶다.</p></div>
+        <div class="row"><div class="lbl">실제 동작</div><p>칸반 카드 클릭 → 상세 뷰. 각 필드는 <b>드롭다운 셀렉트</b> + 마지막 옵션에 숨겨진 <b>“✏️ 직접 입력(주관식 작성)”</b>. 제공 선택지 예: <span class="chip">파편화된 업무 프로세스의 일원화</span> <span class="chip">수동 반복 업무 자동화</span> <span class="chip">오픈소스 기반 워크플로우 정착</span> — <b>홍보영상과 무관한 것뿐</b>. PD는 전 필드에서 무관한 보기를 고르거나, 숨은 “직접 입력”을 찾아 일일이 타이핑해야 한다.</p></div>
+        <div class="row"><div class="lbl">부담</div><p>15개 카드 · 26개 필드가 전부 같은 패턴. 선택지가 안 맞으니 <b>모든 필드를 수동 오버라이드</b>하는 공수가 발생. 사용자가 줄이려 했던 “초반 카드 입력 공수”가 최대치가 되는 구간.</p></div>
+        <p class="flag"><b>문제:</b> (1) 프레임워크·선택지가 영상 제작에 미스매치. (2) “직접 입력”이 드롭다운 끝에 숨어 발견 어려움. (3) AI 추천·선택지 재생성 기능 <b>없음</b>. 막막함이 가장 크게 터지는 곳.</p>
+      </div>
+    </div>
+
+    <div class="step">
+      <div class="step-head"><span class="step-no">STEP 3</span><p class="step-title">동선 — 칸반 · 집중 · 종합정의서 간 이동 <span>양호</span></p></div>
+      <div class="step-body">
+        <div class="row"><div class="lbl">의도</div><p>전체 맥락과 세부 작성 사이를 매끄럽게 오가고 싶다.</p></div>
+        <div class="row"><div class="lbl">실제 동작</div><p><b>칸반</b> 카드 클릭→상세. 상세엔 <span class="kbd">뒤로가기</span> <span class="kbd">⬆ 해당 단계 집중뷰</span> <span class="kbd">전체 칸반(인덱스)</span>. <b>집중뷰</b>엔 뒤로가기 + 인덱스 + “세부 수정”. <b>종합정의서</b>엔 sticky 5단계 네비게이터, 그리고 미작성 필드 <b><span style="color:var(--accent)">(미작성)</span> 클릭 → 해당 카드 상세로 이동</b>. <b>뒤로가기는 historyStack</b>으로 직전 뷰에 정확히 복귀(정의서에서 미작성 클릭 → 상세 → 뒤로 → 정의서 복귀). 우하단 <b>TOP 버튼</b>은 300px 스크롤 시 표시, 클릭 시 부드럽게 최상단.</p></div>
+        <p class="flag"><b>경미한 마찰:</b> 한 화면에 이동 버튼이 3~4개(뒤로 / 인덱스 / 집중뷰 / 상세)라 초기엔 “어느 버튼이 어디로 가는지” 혼란. 집중뷰에선 미작성 필드가 <b>클릭 불가</b>(종합정의서에만 있음). 5단계 네비게이터의 <span class="kbd">scrollIntoView</span>는 메인 스크롤 컨테이너와의 상호작용 엣지가 있을 수 있음.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- ai guidance -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="no">PRIORITY</span>AI 가이드가 가장 시급한 위치</h2>
+      <p class="lede">“제작자의 기획 공수를 줄이기 위한 AI 질문 추천/선택지”가 실제로 닿아야 할 핵심 지점을 영향력 순으로 정렬했다.</p>
+    </div>
+    <div class="findings">
+      <div class="finding top">
+        <div class="rank">01</div>
+        <div>
+          <h3>Input 단계 필드 작성 화면 (상세 뷰의 선택 영역) — <em>최우선</em></h3>
+          <p>각 드롭다운/직접입력 옆에 <b>“✨ AI 추천 답변” · “이 프로젝트에 맞는 선택지 재생성”</b> 버튼. 프로젝트 이름(“테스트 홍보 영상 A”)을 읽고 영상 제작용 답변·선택지를 즉석 제안. 막막함이 가장 크게 터지는 바로 그 지점에 삽입되므로, 초반 기획 공수를 <b>가장 직접적으로</b> 줄인다.</p>
+          <div class="why"><b>왜 최우선:</b> 사용자가 “막막할 때 가이드”를 원하는 순간이 정확히 여기이며, 전체 26개 필드에 일괄 적용되는 승수 효과가 있다.</div>
+        </div>
+      </div>
+      <div class="finding">
+        <div class="rank">02</div>
+        <div>
+          <h3>프로젝트 생성 직후 — 도메인 원샷 설정 (근본 해결)</h3>
+          <p>생성 시 <b>“이 프로젝트는 무슨 유형인가요?”</b>(영상 제작 / 소프트웨어 / 마케팅…)를 묻고, <b>전체 프레임워크 카드·선택지를 그 도메인에 맞게 재스코프</b>. 템플릿 불일치의 뿌리를 끊는 전략적 해법으로, 1순위보다 배치 위치는 앞서지만 구현 비용이 크고 지금의 막막함에 즉시 닿지는 않는다.</p>
+          <div class="why"><b>왜 중요:</b> 1순위를 아무리 잘 만들어도 프레임워크가 소프트웨어 전용이면 근본 공수는 남는다. 두 기능은 함께 가야 한다.</div>
+        </div>
+      </div>
+      <div class="finding">
+        <div class="rank">03</div>
+        <div>
+          <h3>종합 정의서의 (미작성) 필드 — AI 초안 생성</h3>
+          <p>미작성 항목에 <b>“✍️ AI 초안 생성”</b> 제안(기존에 채운 입력을 바탕으로 문장 초안). 정의서가 “완성된 문서”로 보이게 하는 마감 심리를 돕는다.</p>
+        </div>
+      </div>
+      <div class="finding">
+        <div class="rank">04</div>
+        <div>
+          <h3>Review / KPT 회고 단계 — 회고 초안</h3>
+          <p>KPT 카드에 입력 데이터 기반 회고 초안 생성. 공수 절감보다는 완성도를 높이는 보조 위치.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- method -->
+  <section>
+    <div class="sec-head">
+      <h2><span class="no">METHOD &amp; LIMITS</span>테스트 방법과 제약</h2>
+      <p class="lede">평가를 실제로 어떻게 수행했는지 투명하게 기록한다.</p>
+    </div>
+    <table>
+      <thead><tr><th style="width:30%">항목</th><th>내용</th></tr></thead>
+      <tbody>
+        <tr><td><b>배포 URL</b></td><td>Vercel 배포 후보 URL(<span class="kbd">pass5-taupe.vercel.app</span> 등) <b>모두 HTTP 404</b>. 배포가 제거/미확인 상태 → 로컬 dev 서버(:3000, 200 OK)로 대체.</td></tr>
+        <tr><td><b>수행 방식</b></td><td>Google OAuth 로그인이 필요해 실제 브라우저 자동화 로그인은 불가. 대신 <b>렌더링되는 소스 코드 정밀 워크스루</b>로 모든 뷰(칸반·집중·상세·종합정의서)와 내비게이션 핸들러, 필드 입력 로직, 프레임워크 콘텐츠(<span class="kbd">lib/framework.ts</span>)를 추적해 에이전트 탐색 경로를 시뮬레이션.</td></tr>
+        <tr><td><b>주요 근거</b></td><td><span class="kbd">app/page.tsx</span>(뷰·동선) · <span class="kbd">components/KanbanBoard.tsx</span>(칸반·카드 진입) · <span class="kbd">lib/framework.ts</span>(15카드·26필드 선택지) · <span class="kbd">ProjectSidebar.tsx</span>(프로젝트 생성).</td></tr>
+        <tr><td><b>한계</b></td><td>실제 마우스 호버·드래그·스크롤 물리감, 웹 접근성 실측은 미포함. 점수는 코드 기반 정성 평가.</td></tr>
+      </tbody>
+    </table>
+  </section>
+
+  <div class="footer">
+    <p>Pass5 UX 에이전트 테스트 리포트 · 홍보영상 PD 페르소나 기준</p>
+    <p>다음 액션 권장: ① Input 필드에 AI 추천 버튼 ② 프로젝트 생성 시 도메인 원샷 설정 ③ (미작성) 초안 생성</p>
+  </div>
+
+</div>
+</body>
+</html>

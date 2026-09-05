@@ -4,6 +4,8 @@ import { useState, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Project } from '../types';
 import { supabase } from '../supabase/client';
+import { describeSupabaseError } from '../supabase/error';
+import { runSupabaseQuery } from '../supabase/retry';
 import { duplicateCardsForProject, deleteAllCardsByProject } from '../supabase/cards';
 import { initialFrameworkData } from '../framework';
 
@@ -78,14 +80,18 @@ export function useProjectData({
     console.log('Loading projects for user:', userId);
 
     // 프로젝트만 먼저 가져오기
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name, created_by, created_at, folder_id')
-      .order('created_at', { ascending: true });
+    const { data, error } = await runSupabaseQuery(() =>
+      supabase
+        .from('projects')
+        .select('id, name, created_by, created_at, folder_id')
+        .order('created_at', { ascending: true })
+    );
 
     if (error) {
-      console.error('프로젝트 불러오기 실패:', error);
-      alert(`프로젝트를 불러오지 못했습니다.\n${error.message}`);
+      // console.error로 객체를 찍으면 '{}'로 보일 수 있어, 실제 원인을 문자열로 명시 노출
+      const errDesc = describeSupabaseError(error);
+      console.error('프로젝트 불러오기 실패:', errDesc, error);
+      alert(`프로젝트를 불러오지 못했습니다.\n${error.message || errDesc}`);
       setProjects([]);
       setActiveProjectId(null);
       setIsProjectsLoading(false);
@@ -99,12 +105,14 @@ export function useProjectData({
     const projectsWithRoles = await Promise.all(
       loadedProjects.map(async (project) => {
         console.log('Checking role for project:', project.id, 'user:', userId);
-        const { data: memberData, error: memberError } = await supabase
-          .from('project_members')
-          .select('role')
-          .eq('project_id', project.id)
-          .eq('user_id', userId)
-          .maybeSingle(); // single 대신 maybeSingle 사용
+        const { data: memberData, error: memberError } = await runSupabaseQuery(() =>
+          supabase
+            .from('project_members')
+            .select('role')
+            .eq('project_id', project.id)
+            .eq('user_id', userId)
+            .maybeSingle() // single 대신 maybeSingle 사용
+        );
 
         console.log('Member data for project', project.id, ':', memberData, 'error:', memberError);
 
@@ -162,14 +170,16 @@ export function useProjectData({
       return;
     }
 
-    const { data: projectData, error: insertError } = await supabase
-      .from('projects')
-      .insert({
-        name: projectName,
-        created_by: currentUser.id,
-      })
-      .select('id')
-      .single();
+    const { data: projectData, error: insertError } = await runSupabaseQuery(() =>
+      supabase
+        .from('projects')
+        .insert({
+          name: projectName,
+          created_by: currentUser.id,
+        })
+        .select('id')
+        .single()
+    );
 
     if (insertError) {
       if (insertError.code === '23505') {
@@ -193,23 +203,25 @@ export function useProjectData({
         userEmail = refreshResult.data.user?.email || null;
       }
 
-      const { error: memberError } = await supabase
-        .from('project_members')
-        .upsert(
-          {
-            project_id: projectData.id,
-            user_id: currentUser.id,
-            role: 'owner',
-            email: userEmail
-          },
-          { onConflict: 'project_id,user_id', ignoreDuplicates: true }
-        );
+      const { error: memberError } = await runSupabaseQuery(() =>
+        supabase
+          .from('project_members')
+          .upsert(
+            {
+              project_id: projectData.id,
+              user_id: currentUser.id,
+              role: 'owner',
+              email: userEmail
+            },
+            { onConflict: 'project_id,user_id', ignoreDuplicates: true }
+          )
+      );
 
       if (memberError) {
-        console.error('Failed to add owner to project_members:', JSON.stringify(memberError));
+        console.error('Failed to add owner to project_members:', describeSupabaseError(memberError), memberError);
         // Don't alert immediately - this might be a temporary RLS issue
         // The project was created successfully, let the user continue
-        console.warn('Project created but owner assignment failed. email:', userEmail, 'Details:', JSON.stringify(memberError));
+        console.warn('Project created but owner assignment failed. email:', userEmail, 'Details:', describeSupabaseError(memberError));
       }
     }
 
@@ -229,10 +241,12 @@ export function useProjectData({
         return;
       }
 
-      const { error } = await supabase
-        .from('projects')
-        .update({ name: newName })
-        .eq('id', projId);
+      const { error } = await runSupabaseQuery(() =>
+        supabase
+          .from('projects')
+          .update({ name: newName })
+          .eq('id', projId)
+      );
 
       if (error) {
         alert(formatProjectNameError(error));
@@ -255,14 +269,16 @@ export function useProjectData({
 
     const newName = `${proj.name} (복제됨)`;
 
-    const { data, error } = await supabase
-      .from('projects')
-      .insert({
-        name: newName,
-        created_by: currentUser.id,
-      })
-      .select('id, name, created_by, created_at')
-      .single();
+    const { data, error } = await runSupabaseQuery(() =>
+      supabase
+        .from('projects')
+        .insert({
+          name: newName,
+          created_by: currentUser.id,
+        })
+        .select('id, name, created_by, created_at')
+        .single()
+    );
 
     if (error) {
       alert(`프로젝트를 복제하지 못했습니다.\n${error.message}`);
@@ -283,24 +299,26 @@ export function useProjectData({
         userEmail = refreshResult.data.user?.email || null;
       }
 
-      const { error: memberError } = await supabase
-        .from('project_members')
-        .upsert(
-          {
-            project_id: newProject.id,
-            user_id: currentUser.id,
-            role: 'owner',
-            email: userEmail
-          },
-          { onConflict: 'project_id,user_id', ignoreDuplicates: true }
-        );
+      const { error: memberError } = await runSupabaseQuery(() =>
+        supabase
+          .from('project_members')
+          .upsert(
+            {
+              project_id: newProject.id,
+              user_id: currentUser.id,
+              role: 'owner',
+              email: userEmail
+            },
+            { onConflict: 'project_id,user_id', ignoreDuplicates: true }
+          )
+      );
 
       if (memberError) {
-        console.error('Failed to add owner to project_members for duplicated project:', JSON.stringify(memberError));
+        console.error('Failed to add owner to project_members for duplicated project:', describeSupabaseError(memberError), memberError);
         // The duplicated project's RLS access is driven by project_members,
         // so a failed owner insert means the project may not be accessible.
         // Don't alert immediately - this might be a temporary RLS issue.
-        console.warn('Project duplicated but owner assignment failed. The duplicated project may not be accessible via RLS. Details:', JSON.stringify(memberError));
+        console.warn('Project duplicated but owner assignment failed. The duplicated project may not be accessible via RLS. Details:', describeSupabaseError(memberError));
       }
     } else {
       console.error('Missing project id or user id for owner assignment. project_id:', newProject?.id, 'user_id:', currentUser?.id);
@@ -337,10 +355,12 @@ export function useProjectData({
     // Delete all cards for this project from database
     await deleteAllCardsByProject(projId);
 
-    const { error } = await supabase
-      .from('projects')
-      .delete()
-      .eq('id', projId);
+    const { error } = await runSupabaseQuery(() =>
+      supabase
+        .from('projects')
+        .delete()
+        .eq('id', projId)
+    );
 
     if (error) {
       alert(`프로젝트를 삭제하지 못했습니다.\n${error.message}`);
@@ -399,10 +419,12 @@ export function useProjectData({
         return;
       }
 
-      const { error } = await supabase
-        .from('projects')
-        .update({ name: projectName })
-        .eq('id', projId);
+      const { error } = await runSupabaseQuery(() =>
+        supabase
+          .from('projects')
+          .update({ name: projectName })
+          .eq('id', projId)
+      );
 
       if (error) {
         alert(formatProjectNameError(error));
@@ -448,10 +470,12 @@ export function useProjectData({
         return;
       }
 
-      const { error } = await supabase
-        .from('projects')
-        .update({ name: projectName })
-        .eq('id', projId);
+      const { error } = await runSupabaseQuery(() =>
+        supabase
+          .from('projects')
+          .update({ name: projectName })
+          .eq('id', projId)
+      );
 
       if (error) {
         alert(formatProjectNameError(error));

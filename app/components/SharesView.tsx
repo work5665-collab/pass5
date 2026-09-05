@@ -3,6 +3,7 @@
 import React, { Fragment, useEffect, useState, useCallback, useRef } from 'react';
 import { supabase } from '../../lib/supabase/client';
 import type { DictType } from '../../lib/types';
+import ViewScaffold from './ViewScaffold';
 
 // 공유 행 (백엔드 그룹핑 응답의 단일 항목)
 interface ShareEntry {
@@ -595,9 +596,10 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
   );
 
   return (
-    <div className="max-w-4xl mx-auto pb-12 w-full flex flex-col gap-6">
-      {/* 상단 네비게이션 */}
-      <div className="flex justify-between items-center bg-zinc-500/10 p-3 rounded-xl text-xs">
+    <ViewScaffold
+      className="gap-6 pb-12"
+      subBar={(
+        <div className="w-full h-full flex justify-between items-center gap-3 px-3 bg-zinc-500/10 rounded-xl text-xs">
         <div className="flex items-center gap-3">
           <button
             onClick={handleGoBack}
@@ -610,6 +612,8 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
           Shares
         </span>
       </div>
+      )}
+    >
 
       {/* 제목 + 컬럼 설정 + 검색 */}
       <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
@@ -701,6 +705,6 @@ export default function SharesView({ isDark, t, handleGoBack, onOpenTarget }: Sh
           )}
         </div>
       )}
-    </div>
+    </ViewScaffold>
   );
 }

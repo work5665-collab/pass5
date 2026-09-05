@@ -1,5 +1,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { Folder } from '../types';
+import { describeSupabaseError } from './error';
+import { runSupabaseQuery } from './retry';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
@@ -7,13 +9,16 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 // 전체 폴더 목록 조회 (SELECT)
 export async function fetchFolders(): Promise<Folder[]> {
-  const { data, error } = await supabase
-    .from('folders')
-    .select('*')
-    .order('created_at', { ascending: true });
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('folders')
+      .select('*')
+      .order('created_at', { ascending: true })
+  );
 
   if (error) {
-    console.error('Error fetching folders:', error);
+    // '{}' 로 보이던 기존 로그 대신 실제 원인(message/code/details/hint)을 명시 출력
+    console.error('Error fetching folders:', describeSupabaseError(error), error);
     return [];
   }
 
@@ -27,15 +32,17 @@ export async function createFolder(
   parentId: string | null,
   userId: string
 ): Promise<Folder | null> {
-  const { data, error } = await supabase
-    .from('folders')
-    .insert({
-      name,
-      parent_id: parentId,
-      user_id: userId,
-    })
-    .select()
-    .single();
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('folders')
+      .insert({
+        name,
+        parent_id: parentId,
+        user_id: userId,
+      })
+      .select()
+      .single()
+  );
 
   if (error) {
     console.error('Error creating folder:', error);
@@ -47,10 +54,12 @@ export async function createFolder(
 
 // 폴더 이름 수정 (UPDATE)
 export async function updateFolder(folderId: string, name: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('folders')
-    .update({ name })
-    .eq('id', folderId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('folders')
+      .update({ name })
+      .eq('id', folderId)
+  );
 
   if (error) {
     console.error('Error updating folder:', error);
@@ -62,10 +71,12 @@ export async function updateFolder(folderId: string, name: string): Promise<bool
 
 // 폴더 삭제 (DELETE)
 export async function deleteFolder(folderId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('folders')
-    .delete()
-    .eq('id', folderId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('folders')
+      .delete()
+      .eq('id', folderId)
+  );
 
   if (error) {
     console.error('Error deleting folder:', error);
@@ -81,10 +92,12 @@ export async function assignProjectToFolder(
   projectId: string,
   folderId: string | null
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('projects')
-    .update({ folder_id: folderId })
-    .eq('id', projectId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('projects')
+      .update({ folder_id: folderId })
+      .eq('id', projectId)
+  );
 
   if (error) {
     console.error('Error assigning project to folder:', error);

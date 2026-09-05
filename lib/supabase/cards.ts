@@ -1,5 +1,6 @@
 import { createClient } from '@supabase/supabase-js';
 import { DatabaseCard, Field } from '../types';
+import { runSupabaseQuery } from './retry';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://your-project.supabase.co';
 const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || 'your-anon-key';
@@ -15,19 +16,21 @@ export async function createCard(
   fields: Field[],
   position: number = 0
 ): Promise<DatabaseCard | null> {
-  const { data, error } = await supabase
-    .from('cards')
-    .insert({
-      project_id: projectId,
-      card_id: cardId,
-      title,
-      description,
-      step_key: stepKey,
-      fields,
-      position,
-    })
-    .select()
-    .single();
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .insert({
+        project_id: projectId,
+        card_id: cardId,
+        title,
+        description,
+        step_key: stepKey,
+        fields,
+        position,
+      })
+      .select()
+      .single()
+  );
 
   if (error) {
     console.error('Error creating card:', error);
@@ -45,11 +48,13 @@ export async function fetchCardsByProject(projectId: string): Promise<DatabaseCa
     return [];
   }
 
-  const { data, error } = await supabase
-    .from('cards')
-    .select('*')
-    .eq('project_id', projectId)
-    .order('position', { ascending: true });
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .select('*')
+      .eq('project_id', projectId)
+      .order('position', { ascending: true })
+  );
 
   if (error) {
     // 에러 로깅 상세화: error 객체 전체 대신 주요 필드만 출력
@@ -69,12 +74,14 @@ export async function fetchCardsByProjectAndStep(
   projectId: string,
   stepKey: string
 ): Promise<DatabaseCard[]> {
-  const { data, error } = await supabase
-    .from('cards')
-    .select('*')
-    .eq('project_id', projectId)
-    .eq('step_key', stepKey)
-    .order('position', { ascending: true });
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .select('*')
+      .eq('project_id', projectId)
+      .eq('step_key', stepKey)
+      .order('position', { ascending: true })
+  );
 
   if (error) {
     console.error('Error fetching cards by step:', error);
@@ -96,13 +103,15 @@ export async function updateCard(
     position: number;
   }>
 ): Promise<DatabaseCard | null> {
-  const { data, error } = await supabase
-    .from('cards')
-    .update(updates)
-    .eq('id', cardId)
-    .eq('project_id', projectId)
-    .select()
-    .single();
+  const { data, error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .update(updates)
+      .eq('id', cardId)
+      .eq('project_id', projectId)
+      .select()
+      .single()
+  );
 
   if (error) {
     console.error('Error updating card:', error);
@@ -114,11 +123,13 @@ export async function updateCard(
 
 // 카드 삭제 (DELETE with project_id filter)
 export async function deleteCard(cardId: string, projectId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('cards')
-    .delete()
-    .eq('id', cardId)
-    .eq('project_id', projectId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .delete()
+      .eq('id', cardId)
+      .eq('project_id', projectId)
+  );
 
   if (error) {
     console.error('Failed to delete card:', error.message, '(code:', error.code, ')');
@@ -134,11 +145,13 @@ export async function updateCardPosition(
   projectId: string,
   newPosition: number
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('cards')
-    .update({ position: newPosition })
-    .eq('id', cardId)
-    .eq('project_id', projectId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .update({ position: newPosition })
+      .eq('id', cardId)
+      .eq('project_id', projectId)
+  );
 
   if (error) {
     console.error('Error updating card position:', error);
@@ -155,11 +168,13 @@ export async function updateCardStep(
   newStepKey: string,
   newPosition: number = 0
 ): Promise<boolean> {
-  const { error } = await supabase
-    .from('cards')
-    .update({ step_key: newStepKey, position: newPosition })
-    .eq('id', cardId)
-    .eq('project_id', projectId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .update({ step_key: newStepKey, position: newPosition })
+      .eq('id', cardId)
+      .eq('project_id', projectId)
+  );
 
   if (error) {
     console.error('Error updating card step:', error);
@@ -171,10 +186,12 @@ export async function updateCardStep(
 
 // 프로젝트의 모든 카드 삭제 (프로젝트 삭제 시 사용)
 export async function deleteAllCardsByProject(projectId: string): Promise<boolean> {
-  const { error } = await supabase
-    .from('cards')
-    .delete()
-    .eq('project_id', projectId);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .delete()
+      .eq('project_id', projectId)
+  );
 
   if (error) {
     console.error('Error deleting all cards for project:', error);
@@ -207,9 +224,11 @@ export async function duplicateCardsForProject(
     position: card.position,
   }));
 
-  const { error } = await supabase
-    .from('cards')
-    .insert(cardsToInsert);
+  const { error } = await runSupabaseQuery(() =>
+    supabase
+      .from('cards')
+      .insert(cardsToInsert)
+  );
 
   if (error) {
     console.error('Error duplicating cards:', error);
