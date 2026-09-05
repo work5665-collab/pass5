@@ -108,9 +108,10 @@ interface Step  { stepKey: string; title: string; subtitle: string; cards: Card[
 ---
 
 ### 🔗 커밋/태그 상태
-- 직전 커밋: `df7bd43` `feat: 2단계 상단 전체 진행률 프로그레스 바 UI 구현 및 칸반 뷰 제한 완료` (그 앞 `463d991` 1단계 검색/필터, `12a94ba` 진행률 바)
+- 직전 커밋: `cfaf08e` `feat & refactor: PGRST303 재시도·ViewScaffold 뷰 통일·필드값 영속화·AI 추천·헤더 안정화` (그 앞 `df7bd43` 2단계 진행률 바, `463d991` 1단계 검색/필터)
 - 태그: `v1.0-viewer-stable` (안정적 뷰어 버전 기준점)
 - **이번 브리핑 커밋**: 아래 "🛠️ 최근 적용 내역"의 작업(PGRST303 재시도 / ViewScaffold 뷰 통일 / 필드값 영속화 / AI 추천 버튼 / 헤더·스크롤바 안정화)이 이 문서와 함께 커밋·push됨
+- **배포 상태**: GitHub(work5665-collab/pass5) — Vercel 사이트 연동 자동 배포로 main push 시 Production 배포가 트리거됨. 최신 배포(`cfaf08e`)는 **Vercel 빌드 완료 + deployment success** 확인됨. 단 배포 인스턴스 URL은 계정 SSO/배포 보호 상태라 비인증 접근은 로그인용 `vercel.com/sso-api`로 리다이렉트됨.
 
 ---
 
