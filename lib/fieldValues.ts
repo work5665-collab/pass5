@@ -65,3 +65,17 @@ export function setArrayIndex(
 export function mergeUniqueOptions(...arrs: string[][]): string[] {
   return Array.from(new Set(arrs.flat()));
 }
+/** 종합 정의서 포맷: 세트 라벨이 기본값(세트 N)이면 제외, 수정된 라벨이면 포함하여 / 결합 */
+export function formatSpecWithLabels(
+  values: string[],
+  labels: string[],
+  delimiter: string = OPTION_DELIMITER,
+): string {
+  const pairs = values.map((v, i) => {
+    const lbl = (labels && labels[i]) ? labels[i].trim() : '';
+    // 기본 라벨(세트 {idx+1})거나 빈 라벨이면 제외
+    const isDefault = !lbl || /^세트\s*\d+$/.test(lbl);
+    return isDefault ? v : (lbl + ': ' + v);
+  }).filter(Boolean);
+  return pairs.join(delimiter);
+}

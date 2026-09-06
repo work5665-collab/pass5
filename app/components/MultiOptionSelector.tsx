@@ -45,7 +45,7 @@ export default function MultiOptionSelector({
       const opts = optionSets[idx] || [];
       return (
         <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-          <span className="text-[10px] font-bold opacity-60 whitespace-nowrap w-12">세트 {idx + 1}</span>
+          <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
           <select
             aria-label={`세트 ${idx + 1} 옵션`}
             className={`flex-1 min-w-0 text-xs px-2 py-1.5 rounded border outline-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
@@ -97,23 +97,15 @@ export default function MultiOptionSelector({
 
     return (
       <div className={`space-y-2 ${isDark ? 'text-white' : 'text-zinc-900'}`} data-multi-option-selector>
-        {/* 헤더 */}
-        <div className="flex items-center justify-between text-[11px] mb-1">
-          <span className="font-semibold opacity-80">다중 옵션 세트</span>
-          <div className="flex items-center gap-2">
-            <span className="opacity-60">{current.length}개 선택됨 / {total}개 세트</span>
-            {onOpenImportPicker && (
-              <button
-                type="button"
-                onClick={() => onOpenImportPicker(fieldId)}
-                className="px-2 py-0.5 text-[10px] rounded bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
-              >
-                📋 옵션 가져오기
-              </button>
-            )}
-          </div>
-        </div>
+{/* 헤더 제거 — 슬림 레이아웃 */}
 
+        {/* 슬림 상단: 선택 상태 + 아이콘 가져오기 */}
+        <div className="flex items-center justify-between text-[11px] opacity-70 mb-1">
+          <span>{current.length}개 선택 / {total}세트</span>
+          {onOpenImportPicker && (
+            <button type="button" onClick={() => onOpenImportPicker(fieldId)} className="h-6 w-6 rounded hover:bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs" title="옵션 가져오기" aria-label="옵션 가져오기">📋</button>
+          )}
+        </div>
         {/* 동적 세트 rows */}
         {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
 

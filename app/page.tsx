@@ -1255,6 +1255,19 @@ export default function Pass5MasterApp() {
                                 ))}
                                 <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
                               </select>
+                              <MultiOptionSelector
+                                fieldId={field.id}
+                                optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
+                                setsCount={optionSetCounts[field.id] ?? 1}
+                                value={customInputs[field.id]}
+                                isDark={isDark}
+                                onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
+                                onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
+                                onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
+                                onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
+                                onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
+                                onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
+                              />
 
                               <AIRecommendButton
                                 projectName={activeProject?.name || ''}
@@ -1302,35 +1315,6 @@ export default function Pass5MasterApp() {
                                   onChange={(e) => setCustomInputs({ ...customInputs, [field.id]: e.target.value })} onFocus={() => setDragDisabled(true)} onBlur={() => setDragDisabled(false)}
                                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
                                  onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}/>
-                                <div className="mt-2">
-                                  <div className="flex items-center justify-between mb-2">
-                                    <span className="text-[11px] font-semibold opacity-80">다중 옵션 세트</span>
-                                    <button
-                                      type="button"
-                                      onClick={() => {
-                                        setPickerTargetType('existingField');
-                                        setPickerTargetFieldId(field.id);
-                                        setIsPickerOpen(true);
-                                      }}
-                                      className="px-2 py-0.5 text-[10px] rounded bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
-                                    >
-                                      📋 옵션 가져오기
-                                    </button>
-                                  </div>
-                                  <MultiOptionSelector
-                                    fieldId={field.id}
-                                    optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
-                                    setsCount={optionSetCounts[field.id] ?? 1}
-                                    value={customInputs[field.id]}
-                                    isDark={isDark}
-                                    onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
-                                    onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
-                                    onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
-                                    onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
-                                    onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
-                                    onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
-                                  />
-                                </div>
                                 <div className="flex items-center justify-between">
                                   <label className="flex items-center gap-2 text-[11px] cursor-pointer opacity-80 hover:opacity-100">
                                     <input
@@ -1361,22 +1345,6 @@ export default function Pass5MasterApp() {
                               </div>
                             )}
 
-                            {/* 다중 옵션 세트 — 기본 드롭다운 영역 하단 독립 영역 */}
-                            <div className={`mt-2 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/40 border-zinc-700/50' : 'bg-zinc-50/60 border-zinc-200'}`} data-multi-option-area>
-                              <MultiOptionSelector
-                                fieldId={field.id}
-                                optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
-                                setsCount={optionSetCounts[field.id] ?? 1}
-                                value={customInputs[field.id]}
-                                isDark={isDark}
-                                onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
-                                onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
-                                onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
-                                onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
-                                onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
-                                onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
-                              />
-                            </div>
 
                             {currentVal && !isCustomMode && !isEditMode && (
                               <div className="flex items-center justify-between mt-1">
