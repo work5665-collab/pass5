@@ -59,6 +59,7 @@ export default function MultiOptionSelector({
             }}
           >
             <option value="">— 옵션 선택 —</option>
+            <option value="direct">직접 입력</option>
             {opts.map((o) => (
               <option key={o} value={o}>{current.includes(o) ? `✓ ${o}` : o}</option>
             ))}
