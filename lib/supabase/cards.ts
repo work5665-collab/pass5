@@ -33,7 +33,14 @@ export async function createCard(
   );
 
   if (error) {
-    console.error('Error creating card:', error);
+    console.error(
+      'Error creating card:',
+      'message=', error.message,
+      '| details=', error.details,
+      '| hint=', error.hint,
+      '| code=', error.code,
+      '\njson=', JSON.stringify(error, null, 2)
+    );
     return null;
   }
 
@@ -114,7 +121,17 @@ export async function updateCard(
   );
 
   if (error) {
-    console.error('Error updating card:', error);
+    // 에러 상세 노출: message/details/hint/code + 전체 객체 직렬화
+    // (브라우저 콘솔에서 collapsed '{}'로 보이는 경우 실제 원인을 확인하기 위함)
+    console.error(
+      'Error updating card:',
+      'message=', error.message,
+      '| details=', error.details,
+      '| hint=', error.hint,
+      '| code=', error.code,
+      '\njson=', JSON.stringify(error, null, 2),
+      '\npayload=', JSON.stringify(updates)
+    );
     return null;
   }
 

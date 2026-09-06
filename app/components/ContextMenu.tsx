@@ -1,68 +1,23 @@
-'use client';
+import React from 'react';
 
-import React, { useEffect } from 'react';
-
-export interface ContextMenuItem {
-  label: string;
-  icon?: string;
-  onClick: () => void;
-  danger?: boolean;
-}
-
-interface ContextMenuProps {
+export interface ContextMenuProps {
   x: number;
   y: number;
-  items: ContextMenuItem[];
+  isDark?: boolean;
   onClose: () => void;
-  isDark: boolean;
+  items: { label: string; icon?: string; onClick: () => void }[];
 }
 
-// 우클릭 시 커서 위치에 표시되는 공용 컨텍스트 메뉴
-export default function ContextMenu({ x, y, items, onClose, isDark }: ContextMenuProps) {
-  useEffect(() => {
-    const close = () => onClose();
-    window.addEventListener('click', close);
-    window.addEventListener('contextmenu', close);
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('click', close);
-      window.removeEventListener('contextmenu', close);
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [onClose]);
-
+export default function ContextMenu({ x, y, isDark, onClose, items }: ContextMenuProps) {
   return (
-    <div
-      className={`fixed z-[60] min-w-[170px] rounded-lg border shadow-2xl py-1 ${
-        isDark ? 'bg-zinc-800 border-zinc-700' : 'bg-white border-zinc-200'
-      }`}
-      style={{ left: x, top: y }}
-      onClick={(e) => e.stopPropagation()}
-    >
-      {items.map((item, i) => (
-        <button
-          key={i}
-          onClick={(e) => {
-            e.stopPropagation();
-            item.onClick();
-            onClose();
-          }}
-          className={`w-full text-left px-3 py-2 text-sm transition ${
-            item.danger
-              ? isDark
-                ? 'text-rose-400 hover:bg-zinc-700'
-                : 'text-rose-600 hover:bg-zinc-100'
-              : isDark
-                ? 'text-zinc-200 hover:bg-zinc-700'
-                : 'text-zinc-800 hover:bg-zinc-100'
-          }`}
-        >
-          {item.icon && <span className="mr-2">{item.icon}</span>}
-          {item.label}
-        </button>
-      ))}
+    <div className="fixed z-50" style={{ top: y, left: x }}>
+      <div className={`w-32 rounded-xl border shadow-2xl py-1 ${isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-zinc-200 text-zinc-900'}`}>
+        {items.map((it, i) => (
+          <button key={i} onClick={() => { it.onClick(); onClose(); }} className="w-full text-left px-3 py-2 text-sm hover:bg-blue-600 hover:text-white">
+            {it.icon} {it.label}
+          </button>
+        ))}
+      </div>
     </div>
   );
 }

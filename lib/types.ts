@@ -68,6 +68,9 @@ export interface Field {
   id: string;
   label: string;
   options: string[];
+  // (4단계 확장) 복수의 옵션 세트(드롭다운)로 구성되는 필드용 —
+  // 미지정 시 options 가 단일 세트로 동작. 카드/프로젝트별 커스텀 필드에서 정의 가능
+  optionSets?: string[][];
 }
 
 // 카드 타입

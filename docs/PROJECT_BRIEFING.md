@@ -226,3 +226,25 @@ const projectProgress = useMemo(() => {
 - **DB Clean-up 완료**: 테스트 프로젝트(`[테스트] 소유권 이양 검증용`) · project_members · item_shares · 가상 멤버 auth 유저 **전부 0건** 검증 완료 (잔존물 없음)
 - **임시 스크립트 삭제 완료**: `scripts/ui_setup/`(`01_find_user.cjs` · `02_setup.cjs` · `03_cleanup.cjs` · `state.json`) 및 빈 `scripts/` 디렉토리 제거 → git 작업 트리 내 테스트 흔적 0건
 - **빌드 검증**: `npm run build` 성공 — TypeScript 컴파일 · 13개 페이지/라우트 정적 생성 통과
+
+## [Architecture & Refactoring Plan] app/page.tsx 컴포넌트 분리 계획
+
+1. 목적 및 배경
+- app/page.tsx 파일이 비대해짐에 따라 에이전트의 텍스트 수정(Edit) 시 오류 및 빌드 루프 유발 가능성 존재.
+- 유지보수성과 빌드 안정성 확보를 위한 모듈화 필요.
+
+2. 분리 대상 및 원칙
+- 핵심 상태(formData, cardStore 등)는 상위에서 관리하되, 독립적인 UI 영역(카드 렌더링부, 폼 입력부 등)을 하위 컴포넌트로 분리.
+- 단일 파일의 규모를 점진적으로 줄여 에이전트 작업의 정밀도 향상.
+
+3. 실행 단계
+- 1단계: 독립적인 UI 영역 단위 분석 및 분리 대상 식별
+- 2단계: 순차적 컴포넌트 추출 및 props 인터페이스 정의
+- 3단계: npx tsc --noEmit을 통한 빌드 에러 검증
+
+## [Fix Log — 2026-09-07] Runtime & Type Errors Resolved
+
+- **489행 `.trim()` 런타임 크래시 방어**: `typeof cardStore[f.id] === 'string'` 가드 적용 (string[] 대응)
+- **FormDataMap 타입 통합**: `useFieldInteraction` 단일 소스 적용 — `app/page.tsx:229`, `useProjectData`, `useCardData`, `useFieldValuePersistence` 모두 중앙 `FormDataMap` 사용
+- **1244행 `<select value>` scalar 위반**: `currentVal`이 `string[]`일 때 `Array.isArray` fallback + `string` 우선 체크로 React 오류 제거 (카드 세부 이동 시 발생)
+- **저장 상태**: `git commit c965adb` — `app/page.tsx`, `useFieldValuePersistence`, `useCardData`, `useProjectData` 변경사항 저장

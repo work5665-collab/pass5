@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import InviteModal from './components/InviteModal';
 import ShareModal, { ShareTarget } from './components/ShareModal';
 import ContextMenu from './components/ContextMenu';
 import ProjectSidebar from './components/ProjectSidebar';
@@ -21,6 +20,10 @@ import FolderIndexView from './components/FolderIndexView';
 import SharesView from './components/SharesView';
 import ViewScaffold from './components/ViewScaffold';
 import AIRecommendButton from './components/AIRecommendButton';
+
+import HeaderProgress from './components/HeaderProgress';
+import InviteModal from './components/InviteModal'; // 1단계+2단계 분리 (Agent 1 아키텍트)
+// PASS 5: HeaderProgress (상단 진행률) + InviteModal (초대) 분리 — 기능/UI 변경 없음
 
 export default function Pass5MasterApp() {
   const [user, setUser] = useState<any>(null);
@@ -75,8 +78,6 @@ export default function Pass5MasterApp() {
         return;
       }
 
-      console.log('Loading project members for:', projectId);
-      console.log('Current user ID:', user?.id);
 
       const response = await fetch(`/api/members?projectId=${projectId}`, {
         credentials: 'include', // 쿠키(인증 세션)가 서버로 전달되도록 설정
@@ -86,15 +87,12 @@ export default function Pass5MasterApp() {
       });
       const data = await response.json();
 
-      console.log('Members response:', data);
 
       if (response.ok) {
         setProjectMembers(data.members || []);
         
         // 현재 사용자의 권한 설정
         const currentUser = data.members?.find((m: any) => m.user_id === user?.id);
-        console.log('Current user from members:', currentUser);
-        console.log('Current user role:', currentUser?.role);
         setCurrentUserRole(currentUser?.role || null);
       } else {
         console.error('Members API error:', data);
@@ -196,9 +194,7 @@ export default function Pass5MasterApp() {
   useEffect(() => {
     const el = mainScrollRef.current;
     if (!el) return;
-    console.log('TOP-btn: scroll listener attached to main');
     const onScroll = () => {
-      console.log('scrolling:', el.scrollTop);
       setShowTopBtn(el.scrollTop > 300);
     };
     el.addEventListener('scroll', onScroll, { passive: true });
@@ -621,6 +617,8 @@ export default function Pass5MasterApp() {
 
   return (
     <div className={`h-screen overflow-hidden flex flex-col justify-between transition-colors duration-200 print:h-auto print:max-h-none print:overflow-visible ${isDark ? 'bg-[#18181b] text-[#f4f4f5]' : 'bg-[#fafaf9] text-[#18181b]'}`}>
+      {/* 1단계 분리 내장: HeaderProgress (읽기 전용 formData, undefined guard 포함) */}
+      <HeaderProgress projectKey={projectKey} formData={formData} isDark={isDark} />
       <div className="flex flex-1 overflow-hidden">
 
         {/* 사이드바 */}

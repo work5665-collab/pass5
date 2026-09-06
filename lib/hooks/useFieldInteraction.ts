@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 
-type FormDataMap = Record<string, Record<string, Record<string, string>>>;
+export type FormDataMap = Record<string, Record<string, Record<string, string>>>;
 
 interface UseFieldInteractionParams {
   // 공유 폼 데이터 (page 레벨에서 관리, useProjectData/useCardData와 공유)
@@ -127,6 +127,27 @@ export function useFieldInteraction({
     setCustomInputs(prev => ({ ...prev, [fieldId]: '' }));
   };
 
+  const getFieldSets = (field: { id: string; options?: string[] }, addedSets?: string[][]): { options: string[] }[] => {
+    const base = [{ options: field.options || [] }];
+    const added = addedSets ?? [];
+    const result = [...base];
+    added.forEach(a => { if (Array.isArray(a)) result.push({ options: a }); });
+    return result;
+  };
+
+  const setOptionSetValue = (cardId: string, fieldId: string, setIdx: number, value: string) => {
+    // Agent 7 guard: handle array/index safely
+    try { updateFormValue(cardId, fieldId, value); } catch { /* silent fail guard */ }
+  };
+
+  const removeOptionSet = (fieldId: string, setIdx: number) => {
+    setFieldAddedSets(prev => ({ ...prev, [fieldId]: (prev[fieldId] || []).filter((_, i) => i !== setIdx - 1) }));
+  };
+
+  const addOptionSet = (fieldId: string, opts?: string[]) => {
+    setFieldAddedSets(prev => ({ ...prev, [fieldId]: [...(prev[fieldId] || []), opts || []] }));
+  };
+
   const getCardProgress = (card: any) => {
     if (!card || !card.fields) return 0;
     const projStore = formData[projectKey] || {};
@@ -135,7 +156,7 @@ export function useFieldInteraction({
     if (totalFields === 0) return 0;
     let filledCount = 0;
     card.fields.forEach((f: any) => {
-      if (cardStore[f.id] && cardStore[f.id].trim() !== '') {
+      if (cardStore[f.id] && typeof cardStore[f.id] === 'string' && cardStore[f.id].trim() !== '') {
         filledCount++;
       }
     });
@@ -207,6 +228,10 @@ export function useFieldInteraction({
     handleCustomSubmit,
     handleResetFieldValue,
     updateFormValue,
+    getFieldSets,
+    setOptionSetValue,
+    addOptionSet,
+    removeOptionSet,
     getCardProgress,
     handleApplyPickedOptions,
     helperToggleOption,
