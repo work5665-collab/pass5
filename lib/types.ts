@@ -143,3 +143,5 @@ export type ShareTargetType = 'folder' | 'project';
 
 // 사전 데이터 타입
 export type DictData = Record<LangMode, DictType>;
+
+export type FormDataMap = import('./hooks/useFieldInteraction').FormDataMap;

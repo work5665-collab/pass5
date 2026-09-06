@@ -1,4 +1,6 @@
 import React from 'react';
+export type ShareTarget = { type: string; id: string; name?: string };
+
 
 export interface ShareModalProps {
   isOpen: boolean;

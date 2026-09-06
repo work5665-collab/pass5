@@ -16,35 +16,40 @@ export async function createCard(
   fields: Field[],
   position: number = 0
 ): Promise<DatabaseCard | null> {
-  const { data, error } = await runSupabaseQuery(() =>
-    supabase
-      .from('cards')
-      .insert({
-        project_id: projectId,
-        card_id: cardId,
-        title,
-        description,
-        step_key: stepKey,
-        fields,
-        position,
-      })
-      .select()
-      .single()
-  );
-
-  if (error) {
-    console.error(
-      'Error creating card:',
-      'message=', error.message,
-      '| details=', error.details,
-      '| hint=', error.hint,
-      '| code=', error.code,
-      '\njson=', JSON.stringify(error, null, 2)
+  try {
+    const { data, error } = await runSupabaseQuery(() =>
+      supabase
+        .from('cards')
+        .insert({
+          project_id: projectId,
+          card_id: cardId,
+          title,
+          description,
+          step_key: stepKey,
+          fields,
+          position,
+        })
+        .select()
+        .single()
     );
+
+    if (error) {
+      console.error(
+        'Error creating card:',
+        'message=', error.message,
+        '| details=', error.details,
+        '| hint=', error.hint,
+        '| code=', error.code,
+        '\njson=', JSON.stringify(error, null, 2)
+      );
+      return null;
+    }
+
+    return data as DatabaseCard;
+  } catch (e: any) {
+    console.error('cards createCard failed:', e);
     return null;
   }
-
-  return data as DatabaseCard;
 }
 
 // 프로젝트별 카드 목록 조회 (SELECT with project_id filter)
@@ -61,9 +66,8 @@ export async function fetchCardsByProject(projectId: string): Promise<DatabaseCa
       .select('*')
       .eq('project_id', projectId)
       .order('position', { ascending: true })
-  );
-
-  if (error) {
+    );
+    if (error) {
     // 에러 로깅 상세화: error 객체 전체 대신 주요 필드만 출력
     console.error('Error fetching cards:', {
       message: error.message,
@@ -81,24 +85,25 @@ export async function fetchCardsByProjectAndStep(
   projectId: string,
   stepKey: string
 ): Promise<DatabaseCard[]> {
-  const { data, error } = await runSupabaseQuery(() =>
-    supabase
-      .from('cards')
-      .select('*')
-      .eq('project_id', projectId)
-      .eq('step_key', stepKey)
-      .order('position', { ascending: true })
-  );
-
-  if (error) {
-    console.error('Error fetching cards by step:', error);
+  try {
+    const { data, error } = await runSupabaseQuery(() =>
+      supabase
+        .from('cards')
+        .select('*')
+        .eq('project_id', projectId)
+        .eq('step_key', stepKey)
+        .order('position', { ascending: true })
+    );
+    if (error) {
+      console.error('Error fetching cards by step:', error);
+      return [];
+    }
+    return (data || []) as DatabaseCard[];
+  } catch (e) {
+    console.error('cards fetchCardsByProjectAndStep failed:', e);
     return [];
   }
-
-  return (data || []) as DatabaseCard[];
 }
-
-// 카드 수정 (UPDATE with project_id filter)
 export async function updateCard(
   cardId: string,
   projectId: string,
@@ -129,8 +134,7 @@ export async function updateCard(
       '| details=', error.details,
       '| hint=', error.hint,
       '| code=', error.code,
-      '\njson=', JSON.stringify(error, null, 2),
-      '\npayload=', JSON.stringify(updates)
+      '\njson=', JSON.stringify(error, null, 2)
     );
     return null;
   }
