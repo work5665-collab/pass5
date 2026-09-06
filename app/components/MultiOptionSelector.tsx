@@ -44,7 +44,7 @@ export default function MultiOptionSelector({
     const SetRow = ({ idx }: { idx: number }) => {
       const opts = optionSets[idx] || [];
       return (
-        <div className={`flex items-center gap-2 px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+        <div className={`flex flex-row items-center gap-2 w-full px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
           <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
           <select
             aria-label={`세트 ${idx + 1} 옵션`}
@@ -61,8 +61,8 @@ export default function MultiOptionSelector({
               <option key={o} value={o}>{current.includes(o) ? `✓ ${o}` : o}</option>
             ))}
           </select>
-          {/* 버튼 행: AI추천 [아이콘+텍스트] | +세트 [아이콘] | 수정 [아이콘] | 삭제 [아이콘] */}
-          <div className="flex items-center gap-1 shrink-0">
+          {/* 버튼 행: AI추천 | 옵션 가져오기(아이콘) | 수정 | 삭제 */}
+          <div className="flex items-center gap-2 shrink-0">
             <button
               type="button"
               onClick={() => onAiSuggest?.(fieldId, idx)}
@@ -71,13 +71,15 @@ export default function MultiOptionSelector({
             >
               <span>🤖</span><span>AI 추천</span>
             </button>
-                        <button
+            <button
               type="button"
-              onClick={() => onAddSet(fieldId)}
-              className="h-7 w-7 text-[10px] rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-center"
-              title="세트 추가"
-              aria-label="세트 추가"
-            >＋</button>
+              onClick={() => onOpenImportPicker?.(fieldId)}
+              className="h-8 w-8 text-[12px] rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white font-semibold transition flex items-center justify-center flex-shrink-0"
+              title="옵션 가져오기"
+              aria-label="옵션 가져오기"
+            >
+              <span>📥</span>
+            </button>
             <button
               type="button"
               onClick={() => onEditSet?.(fieldId, idx)}
@@ -91,7 +93,7 @@ export default function MultiOptionSelector({
               type="button"
               onClick={() => onRemoveSet(fieldId, idx)}
               disabled={total <= 1}
-              className={`h-7 w-7 text-[12px] rounded font-semibold transition flex items-center justify-center ${total <= 1 ? 'bg-zinc-700/30 text-zinc-500 cursor-not-allowed' : 'bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white'}`}
+              className={`h-7 w-7 text-[12px] rounded font-semibold transition flex items-center justify-center flex-shrink-0 ${total <= 1 ? 'bg-zinc-700/30 text-zinc-500 cursor-not-allowed' : 'bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white'}`}
               title="세트 삭제"
               aria-label="세트 삭제"
             >
@@ -109,6 +111,15 @@ export default function MultiOptionSelector({
 {/* 메타 제거 — 옵션 가져오기 버튼 UI 정리 */}
         {/* 동적 세트 rows */}
         {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
+        <button
+          type="button"
+          onClick={() => onAddSet(fieldId)}
+          className="w-full py-0 text-[10px] leading-none border border-dashed border-zinc-700/50 hover:border-zinc-500 rounded text-zinc-400 hover:text-zinc-200 flex items-center justify-center gap-1 transition-colors mt-1" style={{ height: "20px", minHeight: "20px", maxHeight: "20px" }}
+          title="세트 추가"
+          aria-label="세트 추가"
+        >
+          <span>＋</span> 세트 추가
+        </button>
 
 {/* 메타 텍스트 제거 / +버튼 내부 이동 */}
       </div>
