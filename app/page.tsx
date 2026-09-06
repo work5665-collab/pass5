@@ -1288,7 +1288,7 @@ export default function Pass5MasterApp() {
                             </div>
 
                             {(isCustomMode || isEditMode) && (
-                              <div className={`mt-2 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/90 border-blue-500/40' : 'bg-white border-blue-300 shadow-sm'}`}>
+                              <div className={`mt-2 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/90 border-blue-500/40' : 'bg-white border-blue-300 shadow-sm'}`} onMouseDown={(e)=>e.stopPropagation()} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}>
                                 <span className="text-[11px] font-bold text-blue-400">
                                   {isEditMode ? '선택된 문장 수정하기' : '주관식 직접 작성'}
                                 </span>
