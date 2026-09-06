@@ -3,6 +3,8 @@
 import { useState, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { Project } from '../types';
+import type { FieldValue } from '../fieldValues';
+import type { FormDataMap } from './useFieldInteraction';
 import { supabase } from '../supabase/client';
 import { describeSupabaseError } from '../supabase/error';
 import { runSupabaseQuery } from '../supabase/retry';
@@ -10,7 +12,6 @@ import { duplicateCardsForProject, deleteAllCardsByProject } from '../supabase/c
 import { initialFrameworkData } from '../framework';
 
 type FrameworkData = typeof initialFrameworkData;
-type FormDataMap = Record<string, Record<string, Record<string, string>>>;
 
 // 프로젝트 이름 수정 오류 메시지 포맷 (중복 이름은 사용자 친화적 메시지로 표시)
 const formatProjectNameError = (error: any) => {

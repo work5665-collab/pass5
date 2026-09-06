@@ -12,6 +12,7 @@ import { fetchSharesSharedWithMe } from '../lib/supabase/shares';
 import { initialFrameworkData } from '../lib/framework';
 import { dict } from '../lib/i18n';
 import { useProjectData } from '../lib/hooks/useProjectData';
+import type { FormDataMap } from '../lib/hooks/useFieldInteraction';
 import { useFolderData } from '../lib/hooks/useFolderData';
 import { useCardData } from '../lib/hooks/useCardData';
 import { useFieldInteraction } from '../lib/hooks/useFieldInteraction';
@@ -226,7 +227,7 @@ export default function Pass5MasterApp() {
     setActiveFolderId(lastState.folderId ?? null);
   };
 
-  const [formData, setFormData] = useState<Record<string, Record<string, Record<string, string>>>>({});
+  const [formData, setFormData] = useState<FormDataMap>({});
   const [frameworkDataPerProject, setFrameworkDataPerProject] = useState<Record<string, typeof initialFrameworkData>>({});
 
   // 권한 확인 헬퍼 함수
@@ -486,7 +487,7 @@ export default function Pass5MasterApp() {
         const cardStore = projStore[card.id] || {};
         card.fields.forEach(f => {
           totalFields++;
-          if (cardStore[f.id] && cardStore[f.id].trim() !== '') filledFields++;
+          if (cardStore[f.id] && typeof cardStore[f.id] === 'string' && cardStore[f.id].trim() !== '') filledFields++;
         });
       });
     });
@@ -1244,7 +1245,7 @@ export default function Pass5MasterApp() {
                                 className={`flex-1 p-3 text-xs rounded-xl outline-none border transition ${
                                   isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'
                                 }`}
-                                value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (optionsList.includes(currentVal) ? currentVal : '')}
+                                value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (typeof currentVal === 'string' && optionsList.includes(currentVal) ? currentVal : (Array.isArray(currentVal) && currentVal.length > 0 ? currentVal[0] : ''))}
                                 onChange={(e) => handleSelectChange(field.id, e.target.value, activeCardObj.id)}
                               >
                                 <option value="">--- 보기 중 하나를 선택하세요 ---</option>

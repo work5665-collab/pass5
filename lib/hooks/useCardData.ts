@@ -3,11 +3,12 @@
 import { useState } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
 import type { ViewMode } from '../types';
+import type { FieldValue } from '../fieldValues';
+import type { FormDataMap } from './useFieldInteraction';
 import { initialFrameworkData } from '../framework';
 import { fetchCardsByProject, createCard, updateCard, deleteCard, updateCardStep } from '../supabase/cards';
 
 type FrameworkData = typeof initialFrameworkData;
-type FormDataMap = Record<string, Record<string, Record<string, string>>>;
 
 interface UseCardDataParams {
   activeProjectId: string | null;
@@ -264,11 +265,14 @@ export function useCardData({
 
     const cardFields = findCardFields(cardId);
 
-    await updateCard(cardId, activeProjectId, {
-      title: tempCardTitle.trim(),
-      description: tempCardDesc.trim(),
-      fields: cardFields
-    });
+    // 기본 프레임워크 카드는 DB 행이 아니므로 DB 반영 생략 (22P02 방지)
+    if (isDbCardId(cardId)) {
+      await updateCard(cardId, activeProjectId, {
+        title: tempCardTitle.trim(),
+        description: tempCardDesc.trim(),
+        fields: cardFields
+      });
+    }
 
     updateFrameworkData(prev => prev.map(step => ({
       ...step,
@@ -372,6 +376,12 @@ export function useCardData({
   };
 
   // --- Field management ---
+  // DB `cards` 행 여부 판별: 실제 DB 카드는 UUID id 를 가짐.
+  // 기본 프레임워크 카드(card_xxx)는 DB에 존재하지 않으므로(id 컬럼 UUID vs TEXT id)
+  // DB update 를 생략하고 로컬 프레임워크에만 반영한다 (22P02 uuid 파싱 오류 방지).
+  const isDbCardId = (cardId: string) =>
+    /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(cardId);
+
   const handleAddFieldToCard = async (cardId: string) => {
     if (!newFieldLabel.trim() || !activeProjectId) return;
     const opts = newFieldOptionsStr.split(',').map(o => o.trim()).filter(Boolean);
@@ -386,9 +396,12 @@ export function useCardData({
 
     const updatedFields = [...currentFields, newFieldObj];
 
-    await updateCard(cardId, activeProjectId, {
-      fields: updatedFields
-    });
+    // DB 카드에만 DB 반영 (기본 프레임워크 카드는 로컬 반영만)
+    if (isDbCardId(cardId)) {
+      await updateCard(cardId, activeProjectId, {
+        fields: updatedFields
+      });
+    }
 
     updateFrameworkData(prev => prev.map(step => ({
       ...step,
@@ -411,9 +424,12 @@ export function useCardData({
     const currentFields = findCardFields(cardId);
     const updatedFields = currentFields.filter((f: any) => f.id !== fieldId);
 
-    await updateCard(cardId, activeProjectId, {
-      fields: updatedFields
-    });
+    // DB 카드에만 DB 반영 (기본 프레임워크 카드는 로컬 반영만)
+    if (isDbCardId(cardId)) {
+      await updateCard(cardId, activeProjectId, {
+        fields: updatedFields
+      });
+    }
 
     updateFrameworkData(prev => prev.map(step => ({
       ...step,

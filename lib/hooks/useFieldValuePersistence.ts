@@ -2,9 +2,10 @@
 
 import { useEffect, useRef } from 'react';
 import type { Dispatch, SetStateAction } from 'react';
+import type { FormDataMap } from './useFieldInteraction';
+import type { FieldValue } from '../fieldValues';
 
-type FormDataMap = Record<string, Record<string, Record<string, string>>>;
-
+// 필드값은 단일 문자열(string, 기존 호환) 또는 다중 선택 배열(string[], 4단계) — JSON 직렬화 그대로 저장/복원
 // 카드 필드값(선택값) 영속화 — 사용자별 localStorage
 // ======================================================================
 // 의도된 설계(브리핑): 필드 선택값은 DB(cards)가 아니라 "사용자별 localStorage"에 저장.
