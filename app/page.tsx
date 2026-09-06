@@ -23,6 +23,7 @@ import AIRecommendButton from './components/AIRecommendButton';
 
 import HeaderProgress from './components/HeaderProgress';
 import InviteModal from './components/InviteModal'; // 1단계+2단계 분리 (Agent 1 아키텍트)
+import MultiOptionSelector from './components/MultiOptionSelector';
 // PASS 5: HeaderProgress (상단 진행률) + InviteModal (초대) 분리 — 기능/UI 변경 없음
 
 export default function Pass5MasterApp() {
