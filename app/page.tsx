@@ -117,6 +117,7 @@ export default function Pass5MasterApp() {
   };
 
   const [isDark, setIsDark] = useState(true);
+  const [dragDisabled, setDragDisabled] = React.useState(false);
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
@@ -1161,8 +1162,8 @@ export default function Pass5MasterApp() {
                       return (
                         <div 
                           key={field.id}
-                          draggable
-                          onDragStart={(e) => handleFieldDragStart(e, field.id)}
+                          draggable={!dragDisabled}
+                          onDragStart={!dragDisabled ? (e) => handleFieldDragStart(e, field.id) : undefined}
                           onDragOver={handleCardDragOver}
                           onDrop={(e) => handleFieldDrop(e, activeCardObj.id, field.id)}
                           className={`p-5 rounded-xl border ${isDark ? 'bg-zinc-800/40 border-zinc-700/50' : 'bg-zinc-50 border-zinc-200'} flex flex-col gap-3 relative group`}
@@ -1297,7 +1298,7 @@ export default function Pass5MasterApp() {
                                   rows={2}
                                   placeholder="원하시는 내용을 직접 상세히 적어주세요..."
                                   value={customInputs[field.id] || ''}
-                                  onChange={(e) => setCustomInputs({ ...customInputs, [field.id]: e.target.value })}
+                                  onChange={(e) => setCustomInputs({ ...customInputs, [field.id]: e.target.value })} onFocus={() => setDragDisabled(true)} onBlur={() => setDragDisabled(false)}
                                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
                                  onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}/>
                                 <div className="flex items-center justify-between">
