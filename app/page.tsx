@@ -1298,7 +1298,7 @@ export default function Pass5MasterApp() {
                                   value={customInputs[field.id] || ''}
                                   onChange={(e) => setCustomInputs({ ...customInputs, [field.id]: e.target.value })}
                                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
-                                />
+                                 onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}/>
                                 <div className="flex items-center justify-between">
                                   <label className="flex items-center gap-2 text-[11px] cursor-pointer opacity-80 hover:opacity-100">
                                     <input
