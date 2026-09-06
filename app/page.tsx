@@ -1302,8 +1302,22 @@ export default function Pass5MasterApp() {
                                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
                                  onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}/>
                                 <div className="mt-2">
+                                  <div className="flex items-center justify-between mb-2">
+                                    <span className="text-[11px] font-semibold opacity-80">다중 옵션 세트</span>
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        setPickerTargetType('existingField');
+                                        setPickerTargetFieldId(field.id);
+                                        setIsPickerOpen(true);
+                                      }}
+                                      className="px-2 py-0.5 text-[10px] rounded bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
+                                    >
+                                      📋 옵션 가져오기
+                                    </button>
+                                  </div>
                                   <MultiOptionSelector
-                                    optionSets={field.optionSets || [['기술', '디자인', '마케팅']]}
+                                    optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
                                     value={customInputs[field.id]}
                                     onChange={(v) => setCustomInputs({ ...customInputs, [field.id]: Array.isArray(v) ? v.join('/') : v })}
                                     isDark={isDark}
@@ -1709,7 +1723,31 @@ export default function Pass5MasterApp() {
                             <span>{item.stepTitle}</span> <span>›</span> <span>{item.cardTitle}</span>
                           </div>
                         )}
-                        <div className="text-xs font-bold text-blue-400">{item.field.label}</div>
+                        <div className="flex items-center justify-between">
+                          <div className="text-xs font-bold text-blue-400">{item.field.label}</div>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const baseOpts2 = item.field.options || [];
+                              const customOpts2 = customOptions[item.field.id] || [];
+                              const allOpts2 = Array.from(new Set([...baseOpts2, ...customOpts2]));
+                              const allSelected = allOpts2.every(o => selectedPickedOptions.includes(o));
+                              const next = allSelected
+                                ? selectedPickedOptions.filter(o => !allOpts2.includes(o))
+                                : Array.from(new Set([...selectedPickedOptions, ...allOpts2]));
+                              setSelectedPickedOptions(next);
+                            }}
+                            className="px-2 py-0.5 text-[10px] rounded bg-zinc-700/50 hover:bg-zinc-700 text-zinc-300 transition"
+                          >
+                            {(() => {
+                              const baseOpts2 = item.field.options || [];
+                              const customOpts2 = customOptions[item.field.id] || [];
+                              const allOpts2 = Array.from(new Set([...baseOpts2, ...customOpts2]));
+                              const allSelected = allOpts2.length > 0 && allOpts2.every(o => selectedPickedOptions.includes(o));
+                              return allSelected ? '전체 해제' : '전체 선택';
+                            })()}
+                          </button>
+                        </div>
                         <div className="flex flex-wrap gap-2 mt-1">
                           {allOpts.map((opt, oIdx) => {
                             const isSelected = selectedPickedOptions.includes(opt);

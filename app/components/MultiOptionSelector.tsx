@@ -12,7 +12,15 @@ export default function MultiOptionSelector({ optionSets, value, onChange, isDar
   try {
     const current = toOptionArray(value);
     return (
-      <div className={`space-y-2 ${isDark ? 'text-white' : 'text-zinc-900'}`}>
+      <div className={`space-y-2 ${isDark ? 'text-white' : 'text-zinc-900'}`} data-multi-option-selector>
+        <div className="flex items-center justify-between text-[11px] opacity-70">
+          <span>다중 옵션 세트</span>
+          <span>{current.length}개 선택됨</span>
+        </div>
+        <div className="flex items-center justify-between text-[11px]">
+          <span className="opacity-60">+ 세트 추가</span>
+          <span className="opacity-50">{optionSets.length}개 세트</span>
+        </div>
         {optionSets.map((set, idx) => (
           <div key={idx} className="flex flex-wrap gap-2">
             {set.map((opt) => {
