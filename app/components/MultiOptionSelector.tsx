@@ -49,19 +49,19 @@ export default function MultiOptionSelector({
           <select
             aria-label={`세트 ${idx + 1} 옵션`}
             className={`flex-1 min-w-0 text-xs px-2 py-1.5 rounded border outline-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
+            value={current.includes('') ? '' : (current[0] || '')}
             onChange={(e) => {
-              if (!e.target.value) return;
-              onChange(fieldId, toggleOptionIn(current, e.target.value));
-              e.target.value = '';
+              const val = e.target.value;
+              if (!val) return;
+              onChange(fieldId, toggleOptionIn(current, val));
             }}
-            defaultValue=""
           >
             <option value="">— 옵션 선택 —</option>
             {opts.map((o) => (
               <option key={o} value={o}>{current.includes(o) ? `✓ ${o}` : o}</option>
             ))}
           </select>
-          {/* 통일된 우측 버튼: AI추천 [아이콘+텍스트] / 수정·삭제 [아이콘] */}
+          {/* 버튼 행: AI추천 [아이콘+텍스트] | +세트 [아이콘] | 수정 [아이콘] | 삭제 [아이콘] */}
           <div className="flex items-center gap-1 shrink-0">
             <button
               type="button"
@@ -71,6 +71,13 @@ export default function MultiOptionSelector({
             >
               <span>🤖</span><span>AI 추천</span>
             </button>
+                        <button
+              type="button"
+              onClick={() => onAddSet(fieldId)}
+              className="h-7 w-7 text-[10px] rounded bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white font-semibold transition flex items-center justify-center"
+              title="세트 추가"
+              aria-label="세트 추가"
+            >＋</button>
             <button
               type="button"
               onClick={() => onEditSet?.(fieldId, idx)}
@@ -99,28 +106,11 @@ export default function MultiOptionSelector({
       <div className={`space-y-2 ${isDark ? 'text-white' : 'text-zinc-900'}`} data-multi-option-selector>
 {/* 헤더 제거 — 슬림 레이아웃 */}
 
-        {/* 슬림 상단: 선택 상태 + 아이콘 가져오기 */}
-        <div className="flex items-center justify-between text-[11px] opacity-70 mb-1">
-          <span>{current.length}개 선택 / {total}세트</span>
-          {onOpenImportPicker && (
-            <button type="button" onClick={() => onOpenImportPicker(fieldId)} className="h-6 w-6 rounded hover:bg-blue-600/20 text-blue-400 flex items-center justify-center text-xs" title="옵션 가져오기" aria-label="옵션 가져오기">📋</button>
-          )}
-        </div>
+{/* 메타 제거 — 옵션 가져오기 버튼 UI 정리 */}
         {/* 동적 세트 rows */}
         {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
 
-        {/* + 세트 추가 버튼 (카드 내 독립 영역) */}
-        <button
-          type="button"
-          onClick={() => onAddSet(fieldId)}
-          className={`w-full py-1.5 text-[11px] font-semibold rounded-lg border border-dashed transition ${isDark ? 'border-zinc-600 text-zinc-400 hover:bg-zinc-800' : 'border-zinc-300 text-zinc-500 hover:bg-zinc-50'}`}
-        >
-          + 세트 추가
-        </button>
-
-        <div className="text-[11px] opacity-70 mt-1">
-          선택: {joinOptionsToText(current) || '—'}
-        </div>
+{/* 메타 텍스트 제거 / +버튼 내부 이동 */}
       </div>
     );
   } catch (e) {
