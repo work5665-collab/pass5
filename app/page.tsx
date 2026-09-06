@@ -1301,6 +1301,14 @@ export default function Pass5MasterApp() {
                                   onChange={(e) => setCustomInputs({ ...customInputs, [field.id]: e.target.value })} onFocus={() => setDragDisabled(true)} onBlur={() => setDragDisabled(false)}
                                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
                                  onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}/>
+                                <div className="mt-2">
+                                  <MultiOptionSelector
+                                    optionSets={field.optionSets || [['기술', '디자인', '마케팅']]}
+                                    value={customInputs[field.id]}
+                                    onChange={(v) => setCustomInputs({ ...customInputs, [field.id]: Array.isArray(v) ? v.join('/') : v })}
+                                    isDark={isDark}
+                                  />
+                                </div>
                                 <div className="flex items-center justify-between">
                                   <label className="flex items-center gap-2 text-[11px] cursor-pointer opacity-80 hover:opacity-100">
                                     <input
