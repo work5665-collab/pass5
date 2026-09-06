@@ -1242,19 +1242,7 @@ export default function Pass5MasterApp() {
                                 onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
                                 onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
                                 onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
-                                externalSelect={
-                                  <select
-                                    className={`w-full p-2.5 text-xs rounded-lg outline-none border transition ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
-                                    value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (typeof currentVal === 'string' && optionsList.includes(currentVal) ? currentVal : (Array.isArray(currentVal) && currentVal.length > 0 ? currentVal[0] : ''))}
-                                    onChange={(e) => handleSelectChange(field.id, e.target.value, activeCardObj.id)}
-                                  >
-                                    <option value="">--- 보기 중 하나를 선택하세요 ---</option>
-                                    {optionsList.map((opt: string, oIdx: number) => (
-                                      <option key={oIdx} value={opt}>{opt}</option>
-                                    ))}
-                                    <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
-                                  </select>
-                                }
+                                dropdownOptions={optionsList}
                               />
 
 

@@ -1,4 +1,5 @@
 'use client';
+import { useState } from 'react';
 import { toOptionArray, toggleOptionIn, joinOptionsToText } from '@/lib/fieldValues';
 
 export interface MultiOptionSelectorProps {
@@ -24,8 +25,10 @@ export interface MultiOptionSelectorProps {
   onAiSuggest?: (fieldId: string, setIdx: number) => void;
   /** 개별 수정 콜백 */
   onEditSet?: (fieldId: string, setIdx: number) => void;
-  /** 외곥 드롭다운 (Q1 select 등) — SetRow 내 특정 위치 삽입용 */
+  /** 외곥 드롭다운 (Q1 select 등) — deprecated; 내부 자체 select 사용 */
   externalSelect?: React.ReactNode;
+  /** 세트별 드롭다운 옵션 목록 (page에서 넘김) */
+  dropdownOptions?: string[];
 }
 
 /**
@@ -36,9 +39,11 @@ export interface MultiOptionSelectorProps {
  */
 export default function MultiOptionSelector({
   fieldId, optionSets, setsCount, value, isDark,
-  onChange, onAddSet, onRemoveSet, onOpenImportPicker, onAiSuggest, onEditSet, externalSelect,
+  onChange, onAddSet, onRemoveSet, onOpenImportPicker, onAiSuggest, onEditSet, externalSelect, dropdownOptions,
 }: MultiOptionSelectorProps) {
   try {
+    const [setSelects, setSetSelects] = useState<Record<number,string>>({});
+    const setSelectVal = (idx:number,val:string) => setSetSelects(prev=>({...prev,[idx]:val}));
     const current = toOptionArray(value);
     const total = Math.max(1, setsCount);
 
@@ -50,7 +55,20 @@ export default function MultiOptionSelector({
           {/* 한 줄 통합: 드롭다운(좁게) + 세트 라벨 + 버튼들 — 모두 한 행 */}
           <div className="flex flex-row items-center gap-2 w-full">
             <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 shrink-0 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
-            {externalSelect ? <div className="flex-1 min-w-0">{externalSelect}</div> : null}
+            {/* 세트별 독립 드롭다운 — externalSelect 대체 */}
+            <div className="flex-1 min-w-0">
+              <select
+                className={`w-full p-1.5 text-[10px] rounded-md outline-none border transition ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
+                value={setSelects[idx] ?? ''}
+                onChange={e=>setSelectVal(idx,e.target.value)}
+              >
+                <option value="">--- 보기 중 하나를 선택하세요 ---</option>
+                {(dropdownOptions || []).map((opt:string,oIdx:number)=>(
+                  <option key={oIdx} value={opt}>{opt}</option>
+                ))}
+                <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
+              </select>
+            </div>
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 type="button"
