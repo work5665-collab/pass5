@@ -50,7 +50,7 @@ export default function MultiOptionSelector({
           {/* 한 줄 통합: 드롭다운(좁게) + 세트 라벨 + 버튼들 — 모두 한 행 */}
           <div className="flex flex-row items-center gap-2 w-full">
             <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 shrink-0 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
-            {idx === 0 && externalSelect ? <div className="flex-1 min-w-0">{externalSelect}</div> : null}
+            {externalSelect ? <div className="flex-1 min-w-0">{externalSelect}</div> : null}
             <div className="flex items-center gap-2 shrink-0 ml-auto">
               <button
                 type="button"
