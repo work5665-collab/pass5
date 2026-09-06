@@ -52,17 +52,16 @@ export default function MultiOptionSelector({
             value={current.includes('') ? '' : (current[idx] || current[0] || '')}
             onChange={(e) => {
               const val = e.target.value;
-              if (!val) return;
-              const next = [...current];
-              next[idx] = val;
-              onChange(fieldId, next);
+              if (!val) { const next=[...current]; next[idx]=''; onChange(fieldId,next); return; }
+              if (val==='direct') { const next=[...current]; next[idx]='direct'; onChange(fieldId,next); return; }
+              const next=[...current]; next[idx]=val; onChange(fieldId,next);
             }}
           >
             <option value="">— 옵션 선택 —</option>
-            <option value="direct">직접 입력</option>
             {opts.map((o) => (
               <option key={o} value={o}>{current.includes(o) ? `✓ ${o}` : o}</option>
             ))}
+            <option value="direct">직접 입력</option>
           </select>
           {/* 버튼 행: AI추천 | 옵션 가져오기(아이콘) | 수정 | 삭제 */}
           <div className="flex items-center gap-2 shrink-0">
@@ -114,6 +113,13 @@ export default function MultiOptionSelector({
 {/* 메타 제거 — 옵션 가져오기 버튼 UI 정리 */}
         {/* 동적 세트 rows */}
         {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
+        {current.some(v=>v==='direct') && (
+          <div className="mt-1 px-3 py-2 rounded border border-dashed border-amber-500/50 bg-amber-900/10">
+            <label className="text-xs text-amber-300 font-semibold">주관식 입력</label>
+            <input type="text" placeholder="직접 입력내용" className="w-full mt-1 text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white" />
+            <label className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400"><input type="checkbox" /> 이 보기를 영구 옵션으로 누적 저장</label>
+          </div>
+        )}
         <button
           type="button"
           onClick={() => onAddSet(fieldId)}
