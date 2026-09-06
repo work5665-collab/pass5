@@ -118,6 +118,7 @@ export default function Pass5MasterApp() {
 
   const [isDark, setIsDark] = useState(true);
   const [dragDisabled, setDragDisabled] = React.useState(false);
+  const [optionSetCounts, setOptionSetCounts] = React.useState<Record<string, number>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
@@ -1318,9 +1319,14 @@ export default function Pass5MasterApp() {
                                   </div>
                                   <MultiOptionSelector
                                     optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
+                                    setsCount={optionSetCounts[field.id] ?? 1}
                                     value={customInputs[field.id]}
                                     onChange={(v) => setCustomInputs({ ...customInputs, [field.id]: Array.isArray(v) ? v.join('/') : v })}
                                     isDark={isDark}
+                                    onAddSet={() => setOptionSetCounts(prev => ({ ...prev, [field.id]: (prev[field.id] ?? 1) + 1 }))}
+                                    onRemoveSet={(idx) => setOptionSetCounts(prev => ({ ...prev, [field.id]: Math.max(1, (prev[field.id] ?? 1) - 1) }))}
+                                    onAiSuggest={(idx) => console.log('AI 추천 요청', field.id, idx)}
+                                    onEditSet={(idx) => console.log('개별 수정', field.id, idx)}
                                   />
                                 </div>
                                 <div className="flex items-center justify-between">
