@@ -24,7 +24,6 @@ import AIRecommendButton from './components/AIRecommendButton';
 import HeaderProgress from './components/HeaderProgress';
 import InviteModal from './components/InviteModal'; // 1단계+2단계 분리 (Agent 1 아키텍트)
 import MultiOptionSelector from './components/MultiOptionSelector';
-import MultiOptionPanel from './components/MultiOptionPanel';
 // PASS 5: HeaderProgress (상단 진행률) + InviteModal (초대) 분리 — 기능/UI 변경 없음
 
 export default function Pass5MasterApp() {
@@ -1318,7 +1317,7 @@ export default function Pass5MasterApp() {
                                       📋 옵션 가져오기
                                     </button>
                                   </div>
-                                  <MultiOptionPanel
+                                  <MultiOptionSelector
                                     fieldId={field.id}
                                     optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
                                     setsCount={optionSetCounts[field.id] ?? 1}
@@ -1361,6 +1360,23 @@ export default function Pass5MasterApp() {
                                 </div>
                               </div>
                             )}
+
+                            {/* 다중 옵션 세트 — 기본 드롭다운 영역 하단 독립 영역 */}
+                            <div className={`mt-2 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/40 border-zinc-700/50' : 'bg-zinc-50/60 border-zinc-200'}`} data-multi-option-area>
+                              <MultiOptionSelector
+                                fieldId={field.id}
+                                optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
+                                setsCount={optionSetCounts[field.id] ?? 1}
+                                value={customInputs[field.id]}
+                                isDark={isDark}
+                                onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
+                                onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
+                                onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
+                                onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
+                                onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
+                                onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
+                              />
+                            </div>
 
                             {currentVal && !isCustomMode && !isEditMode && (
                               <div className="flex items-center justify-between mt-1">
