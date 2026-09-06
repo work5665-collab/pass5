@@ -49,11 +49,13 @@ export default function MultiOptionSelector({
           <select
             aria-label={`세트 ${idx + 1} 옵션`}
             className={`flex-1 min-w-0 text-xs px-2 py-1.5 rounded border outline-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
-            value={current.includes('') ? '' : (current[0] || '')}
+            value={current.includes('') ? '' : (current[idx] || current[0] || '')}
             onChange={(e) => {
               const val = e.target.value;
               if (!val) return;
-              onChange(fieldId, toggleOptionIn(current, val));
+              const next = [...current];
+              next[idx] = val;
+              onChange(fieldId, next);
             }}
           >
             <option value="">— 옵션 선택 —</option>
