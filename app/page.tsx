@@ -1243,6 +1243,14 @@ export default function Pass5MasterApp() {
                                 onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
                                 onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
                                 dropdownOptions={optionsList}
+                                customInputValue={customInputs[field.id] || ''}
+                                onCustomInputChange={(val) => setCustomInputs(prev => ({ ...prev, [field.id]: val }))}
+                                onCustomSubmit={(isEdit) => handleCustomSubmit(activeCardObj.id, field.id, isEdit)}
+                                onCustomCancel={() => setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }))}
+                                onSetDragDisabled={setDragDisabled}
+                                savePermanently={!!savePermanently[field.id]}
+                                onSavePermanentlyChange={(v) => setSavePermanently(prev => ({ ...prev, [field.id]: v }))}
+                                isEditMode={isEditMode}
                               />
 
 

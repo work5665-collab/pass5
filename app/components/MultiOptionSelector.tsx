@@ -25,10 +25,26 @@ export interface MultiOptionSelectorProps {
   onAiSuggest?: (fieldId: string, setIdx: number) => void;
   /** 개별 수정 콜백 */
   onEditSet?: (fieldId: string, setIdx: number) => void;
-  /** 외곥 드롭다운 (Q1 select 등) — deprecated; 내부 자체 select 사용 */
+  /** 외곥 드롭다운 — deprecated; 내부 자체 select 사용 */
   externalSelect?: React.ReactNode;
   /** 세트별 드롭다운 옵션 목록 (page에서 넘김) */
   dropdownOptions?: string[];
+  /** 주관식 직접 입력 값 (page.tsx customInputs) */
+  customInputValue?: string;
+  /** 주관식 값 변경 (page.tsx setCustomInputs) */
+  onCustomInputChange?: (val: string) => void;
+  /** 주관식 적용 (page.tsx handleCustomSubmit) */
+  onCustomSubmit?: (isEditMode: boolean) => void;
+  /** 주관식 취소 (page.tsx setFieldModes → 'SELECT') */
+  onCustomCancel?: () => void;
+  /** 포커스 시 드래그 비활성화 */
+  onSetDragDisabled?: (v: boolean) => void;
+  /** 주관식 영구 저장 체크박스 상태 */
+  savePermanently?: boolean;
+  /** 주관식 영구 저장 체크박스 변경 */
+  onSavePermanentlyChange?: (v: boolean) => void;
+  /** 에디트 모드 여부 (page.tsx isEditMode) */
+  isEditMode?: boolean;
 }
 
 /**
@@ -40,6 +56,8 @@ export interface MultiOptionSelectorProps {
 export default function MultiOptionSelector({
   fieldId, optionSets, setsCount, value, isDark,
   onChange, onAddSet, onRemoveSet, onOpenImportPicker, onAiSuggest, onEditSet, externalSelect, dropdownOptions,
+  customInputValue, onCustomInputChange, onCustomSubmit, onCustomCancel,
+  onSetDragDisabled, savePermanently, onSavePermanentlyChange, isEditMode,
 }: MultiOptionSelectorProps) {
   try {
     const [setSelects, setSetSelects] = useState<Record<number,string>>({});
@@ -60,7 +78,13 @@ export default function MultiOptionSelector({
               <select
                 className={`w-full p-1.5 text-[10px] rounded-md outline-none border transition ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
                 value={setSelects[idx] ?? ''}
-                onChange={e=>setSelectVal(idx,e.target.value)}
+                onChange={e=>{
+                  setSelectVal(idx,e.target.value);
+                  // 'direct' 선택 시 current 배열에도 반영하여 기존 주관식 UI 연동
+                  if(e.target.value === 'CUSTOM_MODE'){
+                    const next=[...current]; next[idx]='direct'; onChange(fieldId,next);
+                  }
+                }}
               >
                 <option value="">--- 보기 중 하나를 선택하세요 ---</option>
                 {(dropdownOptions || []).map((opt:string,oIdx:number)=>(
@@ -122,13 +146,32 @@ export default function MultiOptionSelector({
           <div key={idx} className="w-full">
             <SetRow idx={idx} />
             {current[idx] === 'direct' && (
-              <div className="w-full px-3 py-2 mt-1 rounded border border-dashed border-amber-500/50 bg-amber-900/10">
-                <label className="text-xs text-amber-300 font-semibold block mb-1">주관식 입력</label>
-                <input type="text" data-direct-idx={idx} placeholder="직접 입력내용" className="w-full text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white" />
-                <label className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400"><input type="checkbox" /> 이 보기를 영구 옵션으로 누적 저장</label>
-                <div className="flex gap-2 mt-2">
-                  <button type="button" onClick={() => { const next=[...current]; next[idx]=''; onChange(fieldId,next); }} className="flex-1 h-6 text-[11px] rounded bg-zinc-700 text-zinc-300 hover:text-white">취소</button>
-                  <button type="button" onClick={() => { const input = document.querySelector('[data-direct-idx="'+idx+'"]') as HTMLInputElement; if(input){ const v=input.value.trim(); if(v){ const next=[...current]; next[idx]=v; onChange(fieldId,next); } } }} className="flex-1 h-6 text-[11px] rounded bg-amber-600 text-white hover:bg-amber-500">적용하기</button>
+              <div className={`w-full mt-1 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/90 border-blue-500/40' : 'bg-white border-blue-300 shadow-sm'}`} onMouseDown={(e)=>e.stopPropagation()} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}>
+                <span className="text-[11px] font-bold text-blue-400">주관식 직접 작성</span>
+                <textarea
+                  rows={2}
+                  placeholder="원하시는 내용을 직접 상세히 적어주세요..."
+                  value={customInputValue || ''}
+                  onChange={(e) => onCustomInputChange?.(e.target.value)}
+                  onFocus={() => onSetDragDisabled?.(true)}
+                  onBlur={() => onSetDragDisabled?.(false)}
+                  className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
+                  onMouseDown={(e)=>{e.stopPropagation()}} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}
+                />
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 text-[11px] cursor-pointer opacity-80 hover:opacity-100">
+                    <input
+                      type="checkbox"
+                      checked={!!savePermanently}
+                      onChange={(e) => onSavePermanentlyChange?.(e.target.checked)}
+                      className="rounded border-zinc-600 text-blue-600 focus:ring-0"
+                    />
+                    <span>➕ 이 보기를 영구 옵션으로 누적 저장</span>
+                  </label>
+                  <div className="flex gap-2">
+                    <button type="button" onClick={() => { onCustomCancel?.(); const next=[...current]; next[idx]=''; onChange(fieldId,next); setSelectVal(idx,''); }} className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg">취소</button>
+                    <button type="button" onClick={() => onCustomSubmit?.(!!isEditMode)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition">적용하기</button>
+                  </div>
                 </div>
               </div>
             )}
