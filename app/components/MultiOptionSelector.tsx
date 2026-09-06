@@ -102,17 +102,7 @@ export default function MultiOptionSelector({
               🗑
             </button>
           </div>
-          {current[idx] === 'direct' && (
-            <div className="w-full mt-1 px-3 py-2 rounded border border-dashed border-amber-500/50 bg-amber-900/10">
-              <label className="text-xs text-amber-300 font-semibold block mb-1">주관식 입력</label>
-              <input type="text" placeholder="직접 입력내용" className="w-full text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white" />
-              <label className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400"><input type="checkbox" /> 이 보기를 영구 옵션으로 누적 저장</label>
-              <div className="flex gap-2 mt-2">
-                <button type="button" onClick={() => { const next=[...current]; next[idx]=''; onChange(fieldId,next); }} className="flex-1 h-6 text-[11px] rounded bg-zinc-700 text-zinc-300 hover:text-white">취소</button>
-                <button type="button" onClick={() => {}} className="flex-1 h-6 text-[11px] rounded bg-amber-600 text-white hover:bg-amber-500">적용하기</button>
-              </div>
-            </div>
-          )}
+
         </div>
       );
     };
@@ -123,7 +113,22 @@ export default function MultiOptionSelector({
 
 {/* 메타 제거 — 옵션 가져오기 버튼 UI 정리 */}
         {/* 동적 세트 rows */}
-        {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
+        {Array.from({ length: total }).map((_, idx) => (
+          <div key={idx} className="w-full">
+            <SetRow idx={idx} />
+            {current[idx] === 'direct' && (
+              <div className="w-full px-3 py-2 mt-1 rounded border border-dashed border-amber-500/50 bg-amber-900/10">
+                <label className="text-xs text-amber-300 font-semibold block mb-1">주관식 입력</label>
+                <input type="text" placeholder="직접 입력내용" className="w-full text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white" />
+                <label className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400"><input type="checkbox" /> 이 보기를 영구 옵션으로 누적 저장</label>
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => { const next=[...current]; next[idx]=''; onChange(fieldId,next); }} className="flex-1 h-6 text-[11px] rounded bg-zinc-700 text-zinc-300 hover:text-white">취소</button>
+                  <button type="button" onClick={() => {}} className="flex-1 h-6 text-[11px] rounded bg-amber-600 text-white hover:bg-amber-500">적용하기</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
 
         <button
           type="button"
