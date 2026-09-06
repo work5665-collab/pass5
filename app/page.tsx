@@ -1240,7 +1240,22 @@ export default function Pass5MasterApp() {
                             </div>
                           </div>
 
-                          <MultiOptionSelector
+                          <div className="flex flex-col gap-2">
+                            <div className="flex items-center gap-2">
+                              <select
+                                className={`flex-1 p-3 text-xs rounded-xl outline-none border transition ${
+                                  isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'
+                                }`}
+                                value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (typeof currentVal === 'string' && optionsList.includes(currentVal) ? currentVal : (Array.isArray(currentVal) && currentVal.length > 0 ? currentVal[0] : ''))}
+                                onChange={(e) => handleSelectChange(field.id, e.target.value, activeCardObj.id)}
+                              >
+                                <option value="">--- 보기 중 하나를 선택하세요 ---</option>
+                                {optionsList.map((opt: string, oIdx: number) => (
+                                  <option key={oIdx} value={opt}>{opt}</option>
+                                ))}
+                                <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
+                              </select>
+                              <MultiOptionSelector
                                 fieldId={field.id}
                                 optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
                                 setsCount={optionSetCounts[field.id] ?? 1}
@@ -1249,6 +1264,7 @@ export default function Pass5MasterApp() {
                                 onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
                                 onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
                                 onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
+                                onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
                                 onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
                                 onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
                               />
