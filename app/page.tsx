@@ -1200,18 +1200,6 @@ export default function Pass5MasterApp() {
                             )}
 
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  setPickerTargetType('existingField');
-                                  setPickerTargetFieldId(field.id);
-                                  setIsPickerOpen(true);
-                                }}
-                                className="px-2.5 py-1 text-[10px] rounded bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 font-semibold transition"
-                              >
-                                📋 옵션 가져오기
-                              </button>
-
                               {!isEditingThisField && (
                                 <button
                                   type="button"
@@ -1241,20 +1229,18 @@ export default function Pass5MasterApp() {
                           </div>
 
                           <div className="flex flex-col gap-2">
-                            <div className="flex items-center gap-2">
-                              <select
-                                className={`flex-1 p-3 text-xs rounded-xl outline-none border transition ${
-                                  isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'
-                                }`}
-                                value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (typeof currentVal === 'string' && optionsList.includes(currentVal) ? currentVal : (Array.isArray(currentVal) && currentVal.length > 0 ? currentVal[0] : ''))}
-                                onChange={(e) => handleSelectChange(field.id, e.target.value, activeCardObj.id)}
-                              >
-                                <option value="">--- 보기 중 하나를 선택하세요 ---</option>
-                                {optionsList.map((opt: string, oIdx: number) => (
-                                  <option key={oIdx} value={opt}>{opt}</option>
-                                ))}
-                                <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
-                              </select>
+                            <select
+                              className={`flex-1 p-3 text-xs rounded-xl outline-none border transition ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
+                              value={isCustomMode || isEditMode ? 'CUSTOM_MODE' : (typeof currentVal === 'string' && optionsList.includes(currentVal) ? currentVal : (Array.isArray(currentVal) && currentVal.length > 0 ? currentVal[0] : ''))}
+                              onChange={(e) => handleSelectChange(field.id, e.target.value, activeCardObj.id)}
+                            >
+                              <option value="">--- 보기 중 하나를 선택하세요 ---</option>
+                              {optionsList.map((opt: string, oIdx: number) => (
+                                <option key={oIdx} value={opt}>{opt}</option>
+                              ))}
+                              <option value="CUSTOM_MODE">✏️ 직접 입력 (주관식 작성)</option>
+                            </select>
+                            <div className="flex flex-col gap-2">
                               <MultiOptionSelector
                                 fieldId={field.id}
                                 optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
@@ -1269,27 +1255,6 @@ export default function Pass5MasterApp() {
                                 onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
                               />
 
-                              <AIRecommendButton
-                                projectName={activeProject?.name || ''}
-                                fieldLabel={field.label}
-                                isDark={isDark}
-                                onSelect={(val) => {
-                                  // 추천값이 기존 옵션에 있으면 select 모드, 없으면 custom 모드로 전환 후 입력
-                                  const allOpts = getFieldOptions(field, activeCardObj.id);
-                                  if (allOpts.includes(val)) {
-                                    setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }));
-                                    updateFormValue(activeCardObj.id, field.id, val);
-                                  } else {
-                                    setFieldModes(prev => ({ ...prev, [field.id]: 'CUSTOM' }));
-                                    setCustomInputs(prev => ({ ...prev, [field.id]: val }));
-                                    // custom submit 자동 호출 → SELECT 모드 복귀
-                                    setTimeout(() => {
-                                      handleCustomSubmit(activeCardObj.id, field.id, false);
-                                      setFieldModes(prev => ({ ...prev, [field.id]: 'SELECT' }));
-                                    }, 80);
-                                  }
-                                }}
-                              />
 
                               {currentVal && !isCustomMode && !isEditMode && (
                                 <button

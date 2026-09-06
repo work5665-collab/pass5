@@ -1,5 +1,4 @@
 'use client';
-import React from 'react';
 import { toOptionArray, toggleOptionIn, joinOptionsToText } from '@/lib/fieldValues';
 
 export interface MultiOptionSelectorProps {
@@ -43,69 +42,51 @@ export default function MultiOptionSelector({
 
     // 단일 세트 row (내부 캡슐화 — 외부 파일 의존 없음)
     const SetRow = ({ idx }: { idx: number }) => {
-      const [directText, setDirectText] = React.useState('');
-      const [persist, setPersist] = React.useState(false);
       const opts = optionSets[idx] || [];
       return (
-        <div className={`flex flex-row items-center gap-2 w-full px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
-          <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
-          <select
-            aria-label={`세트 ${idx + 1} 옵션`}
-            className={`flex-1 min-w-0 text-xs px-2 py-1.5 rounded border outline-none ${isDark ? 'bg-zinc-900 border-zinc-700 text-white' : 'bg-white border-zinc-300 text-zinc-900'}`}
-            value={current.includes('') ? '' : (current[idx] || current[0] || '')}
-            onChange={(e) => {
-              const val = e.target.value;
-              if (!val) { const next=[...current]; next[idx]=''; onChange(fieldId,next); return; }
-              if (val==='direct') { const next=[...current]; next[idx]='direct'; onChange(fieldId,next); return; }
-              const next=[...current]; next[idx]=val; onChange(fieldId,next);
-            }}
-          >
-            <option value="">— 옵션 선택 —</option>
-            {opts.map((o) => (
-              <option key={o} value={o}>{current.includes(o) ? `✓ ${o}` : o}</option>
-            ))}
-            <option value="direct">직접 입력</option>
-          </select>
-          {/* 버튼 행: AI추천 | 옵션 가져오기(아이콘) | 수정 | 삭제 */}
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => onAiSuggest?.(fieldId, idx)}
-              className="h-7 px-2 text-[10px] rounded bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white font-semibold transition flex items-center gap-1"
-              title="AI 추천"
-            >
-              <span>🤖</span><span>AI 추천</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onOpenImportPicker?.(fieldId)}
-              className="h-8 w-8 text-[12px] rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white font-semibold transition flex items-center justify-center flex-shrink-0"
-              title="옵션 가져오기"
-              aria-label="옵션 가져오기"
-            >
-              <span>📥</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => onEditSet?.(fieldId, idx)}
-              className="h-7 w-7 text-[12px] rounded bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white font-semibold transition flex items-center justify-center"
-              title="개별 수정"
-              aria-label="개별 수정"
-            >
-              ✏️
-            </button>
-            <button
-              type="button"
-              onClick={() => onRemoveSet(fieldId, idx)}
-              disabled={total <= 1}
-              className={`h-7 w-7 text-[12px] rounded font-semibold transition flex items-center justify-center flex-shrink-0 ${total <= 1 ? 'bg-zinc-700/30 text-zinc-500 cursor-not-allowed' : 'bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white'}`}
-              title="세트 삭제"
-              aria-label="세트 삭제"
-            >
-              🗑
-            </button>
+        <div className={`flex flex-col gap-1.5 w-full px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
+          {/* 한 줄 통합: 드롭다운(좁게) + 세트 라벨 + 버튼들 — 모두 한 행 */}
+          <div className="flex flex-row items-center gap-2 w-full">
+            <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 shrink-0 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
+            <div className="flex items-center gap-2 shrink-0 ml-auto">
+              <button
+                type="button"
+                onClick={() => onAiSuggest?.(fieldId, idx)}
+                className="h-7 px-2 text-[10px] rounded bg-violet-600/20 hover:bg-violet-600 text-violet-300 hover:text-white font-semibold transition flex items-center gap-1"
+                title="AI 추천"
+              >
+                <span>🤖</span><span>AI 추천</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onOpenImportPicker?.(fieldId)}
+                className="h-8 w-8 text-[12px] rounded bg-blue-600/20 hover:bg-blue-600 text-blue-300 hover:text-white font-semibold transition flex items-center justify-center flex-shrink-0"
+                title="옵션 가져오기"
+                aria-label="옵션 가져오기"
+              >
+                <span>📥</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => onEditSet?.(fieldId, idx)}
+                className="h-7 w-7 text-[12px] rounded bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white font-semibold transition flex items-center justify-center"
+                title="개별 수정"
+                aria-label="개별 수정"
+              >
+                ✏️
+              </button>
+              <button
+                type="button"
+                onClick={() => onRemoveSet(fieldId, idx)}
+                disabled={total <= 1}
+                className={`h-7 w-7 text-[12px] rounded font-semibold transition flex items-center justify-center flex-shrink-0 ${total <= 1 ? 'bg-zinc-700/30 text-zinc-500 cursor-not-allowed' : 'bg-rose-600/20 hover:bg-rose-600 text-rose-300 hover:text-white'}`}
+                title="세트 삭제"
+                aria-label="세트 삭제"
+              >
+                🗑
+              </button>
+            </div>
           </div>
-
         </div>
       );
     };
@@ -116,7 +97,22 @@ export default function MultiOptionSelector({
 
 {/* 메타 제거 — 옵션 가져오기 버튼 UI 정리 */}
         {/* 동적 세트 rows */}
-        {Array.from({ length: total }).map((_, idx) => <SetRow key={idx} idx={idx} />)}
+        {Array.from({ length: total }).map((_, idx) => (
+          <div key={idx} className="w-full">
+            <SetRow idx={idx} />
+            {current[idx] === 'direct' && (
+              <div className="w-full px-3 py-2 mt-1 rounded border border-dashed border-amber-500/50 bg-amber-900/10">
+                <label className="text-xs text-amber-300 font-semibold block mb-1">주관식 입력</label>
+                <input type="text" data-direct-idx={idx} placeholder="직접 입력내용" className="w-full text-xs px-2 py-1 rounded bg-zinc-900 border border-zinc-700 text-white" />
+                <label className="flex items-center gap-2 mt-1.5 text-[10px] text-zinc-400"><input type="checkbox" /> 이 보기를 영구 옵션으로 누적 저장</label>
+                <div className="flex gap-2 mt-2">
+                  <button type="button" onClick={() => { const next=[...current]; next[idx]=''; onChange(fieldId,next); }} className="flex-1 h-6 text-[11px] rounded bg-zinc-700 text-zinc-300 hover:text-white">취소</button>
+                  <button type="button" onClick={() => { const input = document.querySelector('[data-direct-idx="'+idx+'"]') as HTMLInputElement; if(input){ const v=input.value.trim(); if(v){ const next=[...current]; next[idx]=v; onChange(fieldId,next); } } }} className="flex-1 h-6 text-[11px] rounded bg-amber-600 text-white hover:bg-amber-500">적용하기</button>
+                </div>
+              </div>
+            )}
+          </div>
+        ))}
 
         <button
           type="button"
