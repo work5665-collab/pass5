@@ -153,14 +153,19 @@ export function useFieldInteraction({
     if (!card || !card.fields) return 0;
     const projStore = formData[projectKey] || {};
     const cardStore = projStore[card.id] || {};
-    const totalFields = card.fields.length;
-    if (totalFields === 0) return 0;
+    // 세트 항목 포함: fieldAddedSets는 같은 hook 내 상태이므로 안전 접근 가능
     let filledCount = 0;
+    let totalFields = 0;
     card.fields.forEach((f: any) => {
-      if (cardStore[f.id] && typeof cardStore[f.id] === 'string' && cardStore[f.id].trim() !== '') {
-        filledCount++;
-      }
+      const addedSets = fieldAddedSets[f.id] || [];
+      totalFields += 1 + addedSets.length; // 기본 필드 + 세트 항목(1,2,1 → 3)
+      // 선택 값이 채워졌으면 진행도 포함
+      const val = cardStore[f.id];
+      if (val && typeof val === 'string' && val.trim() !== '') filledCount++;
+      // 세트 항목이 존재하면 진행도 포함 (초기화/취소 시 fieldAddedSets에서 제거됨)
+      if (addedSets.length > 0) filledCount += addedSets.length;
     });
+    if (totalFields === 0) return 0;
     return Math.round((filledCount / totalFields) * 100);
   };
 
