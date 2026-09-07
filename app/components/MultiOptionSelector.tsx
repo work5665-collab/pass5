@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { toOptionArray, toggleOptionIn, joinOptionsToText } from '@/lib/fieldValues';
 
 export interface MultiOptionSelectorProps {
@@ -45,6 +45,10 @@ export interface MultiOptionSelectorProps {
   onSavePermanentlyChange?: (v: boolean) => void;
   /** 에디트 모드 여부 (page.tsx isEditMode) */
   isEditMode?: boolean;
+  /** 세트 이름 표기 (수정 가능) */
+  labelNames?: Record<number, string>;
+  /** 세트 이름 변경 콜백 */
+  onLabelChange?: (idx: number, val: string) => void;
 }
 
 /**
@@ -57,7 +61,7 @@ export default function MultiOptionSelector({
   fieldId, optionSets, setsCount, value, isDark,
   onChange, onAddSet, onRemoveSet, onOpenImportPicker, onAiSuggest, onEditSet, externalSelect, dropdownOptions,
   customInputValue, onCustomInputChange, onCustomSubmit, onCustomCancel,
-  onSetDragDisabled, savePermanently, onSavePermanentlyChange, isEditMode,
+  onSetDragDisabled, savePermanently, onSavePermanentlyChange, isEditMode, labelNames, onLabelChange,
 }: MultiOptionSelectorProps) {
   try {
     const [setSelects, setSetSelects] = useState<Record<number,string>>({});
@@ -66,6 +70,7 @@ export default function MultiOptionSelector({
     const setCustomInputVal = (idx:number,val:string) => setSetCustomInputs(prev=>({...prev,[idx]:val}));
     const current = toOptionArray(value);
     const total = Math.max(1, setsCount);
+    useEffect(() => { try { const arr = toOptionArray(value); arr.forEach((v, i) => { if (v && v.trim() !== '' && v !== 'direct') setSelectVal(i, v); }); } catch {} }, [value]);
 
     // 단일 세트 row (내부 캡슐화 — 외부 파일 의존 없음)
     const SetRow = ({ idx }: { idx: number }) => {
@@ -74,17 +79,21 @@ export default function MultiOptionSelector({
         <div className={`flex flex-col gap-1.5 w-full px-3 py-2 rounded-lg border ${isDark ? 'bg-zinc-800/50 border-zinc-700' : 'bg-zinc-50 border-zinc-200'}`}>
           {/* 한 줄 통합: 드롭다운(좁게) + 세트 라벨 + 버튼들 — 모두 한 행 */}
           <div className="flex flex-row items-center gap-2 w-full">
-            <input aria-label={`세트 ${idx+1} 라벨`} defaultValue={`세트 ${idx+1}`} onChange={e=>{}} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 shrink-0 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
+            <input aria-label={`세트 ${idx+1} 라벨`} value={labelNames?.[idx] ?? `세트 ${idx+1}`} onChange={e=>onLabelChange?.(idx, e.target.value)} className="text-[10px] font-bold opacity-90 bg-zinc-800/30 border-b border-dashed border-blue-400/60 px-0.5 w-16 shrink-0 text-center focus:outline-none focus:border-blue-500 focus:bg-zinc-800 rounded-sm" />
             {/* 세트별 독립 드롭다운 — externalSelect 대체 */}
             <div className="flex-1 min-w-0">
               <select
                 className={`w-full p-1.5 text-[10px] rounded-md outline-none border transition ${isDark ? 'bg-zinc-900 border-zinc-700 text-white focus:border-blue-500' : 'bg-white border-zinc-300 text-zinc-900 focus:border-blue-500'}`}
                 value={setSelects[idx] ?? ''}
                 onChange={e=>{
-                  setSelectVal(idx,e.target.value);
-                  // 'direct' 선택 시 current 배열에도 반영하여 기존 주관식 UI 연동
-                  if(e.target.value === 'CUSTOM_MODE'){
+                  const selVal = e.target.value;
+                  setSelectVal(idx, selVal);
+                  if(selVal === 'CUSTOM_MODE'){
                     const next=[...current]; next[idx]='direct'; onChange(fieldId,next);
+                  } else if(selVal && selVal.trim() !== ''){
+                    const next=[...current]; next[idx]=selVal; onChange(fieldId,next);
+                  } else {
+                    const next=[...current]; next[idx]=''; onChange(fieldId,next);
                   }
                 }}
               >
@@ -115,8 +124,9 @@ export default function MultiOptionSelector({
               </button>
               <button
                 type="button"
-                onClick={() => onEditSet?.(fieldId, idx)}
-                className="h-7 w-7 text-[12px] rounded bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white font-semibold transition flex items-center justify-center"
+                onClick={() => { onEditSet?.(fieldId, idx); setSelectVal(idx, 'EDIT_MODE'); const next=[...current]; next[idx]='direct'; onChange(fieldId,next); }}
+                disabled={!( (current[idx] && current[idx].trim() !== '') || (setSelects[idx] && setSelects[idx].trim() !== '') )}
+                className="h-7 w-7 text-[12px] rounded bg-amber-600/20 hover:bg-amber-600 text-amber-300 hover:text-white font-semibold transition flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
                 title="개별 수정"
                 aria-label="개별 수정"
               >
@@ -147,9 +157,9 @@ export default function MultiOptionSelector({
         {Array.from({ length: total }).map((_, idx) => (
           <div key={idx} className="w-full">
             <SetRow idx={idx} />
-            {setSelects[idx] === 'CUSTOM_MODE' && (
+            { (setSelects[idx] === 'CUSTOM_MODE' || setSelects[idx] === 'EDIT_MODE') && (
               <div className={`w-full mt-1 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/90 border-blue-500/40' : 'bg-white border-blue-300 shadow-sm'}`} onMouseDown={(e)=>e.stopPropagation()} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}>
-                <span className="text-[11px] font-bold text-blue-400">주관식 직접 작성</span>
+                <span className="text-[11px] font-bold text-blue-400">{setSelects[idx] === 'EDIT_MODE' ? '선택된 문장 수정하기' : '주관식 직접 작성'}</span>
                 <textarea
                   rows={2}
                   placeholder="원하시는 내용을 직접 상세히 적어주세요..."
@@ -172,7 +182,7 @@ export default function MultiOptionSelector({
                   </label>
                   <div className="flex gap-2">
                     <button type="button" onClick={() => { onCustomCancel?.(); const next=[...current]; next[idx]=''; onChange(fieldId,next); setSelectVal(idx,''); setCustomInputVal(idx,''); }} className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg">취소</button>
-                    <button type="button" onClick={() => { const text = setCustomInputs[idx] || customInputValue || ''; onCustomSubmit?.(!!isEditMode); if(text) setSelectVal(idx, text); else setSelectVal(idx,''); setCustomInputVal(idx,''); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition">적용하기</button>
+                    <button type="button" onClick={() => { const text = setCustomInputs[idx] || customInputValue || ''; onCustomSubmit?.(setSelects[idx] === 'EDIT_MODE' ? true : !!isEditMode); if(text) { setSelectVal(idx, text); const next=[...current]; next[idx]=text; onChange(fieldId,next); } else { setSelectVal(idx,''); const next=[...current]; next[idx]=''; onChange(fieldId,next); } setCustomInputVal(idx,''); setSelectVal(idx, text ? text : ''); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition">적용하기</button>
                   </div>
                 </div>
               </div>

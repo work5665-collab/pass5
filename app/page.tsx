@@ -21,12 +21,13 @@ import SharesView from './components/SharesView';
 import ViewScaffold from './components/ViewScaffold';
 import AIRecommendButton from './components/AIRecommendButton';
 
-import HeaderProgress from './components/HeaderProgress';
 import InviteModal from './components/InviteModal'; // 1단계+2단계 분리 (Agent 1 아키텍트)
+import HeaderProgress from './components/HeaderProgress';
 import MultiOptionSelector from './components/MultiOptionSelector';
-// PASS 5: HeaderProgress (상단 진행률) + InviteModal (초대) 분리 — 기능/UI 변경 없음
+import { ProgressDebugPanel } from './components/ProgressDebugPanel';
 
 export default function Pass5MasterApp() {
+  // PASS 5: InviteModal 분리 — 기능/UI 변경 없음
   const [user, setUser] = useState<any>(null);
   const [isAuthLoading, setIsAuthLoading] = useState(true);
   const [isMounted, setIsMounted] = useState(false);
@@ -119,6 +120,7 @@ export default function Pass5MasterApp() {
   const [isDark, setIsDark] = useState(true);
   const [dragDisabled, setDragDisabled] = React.useState(false);
   const [optionSetCounts, setOptionSetCounts] = React.useState<Record<string, number>>({});
+  const [setLabels, setSetLabels] = React.useState<Record<string, Record<number,string>>>({});
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [lang, setLang] = useState<LangMode>('KO');
   const t = dict[lang];
@@ -460,9 +462,13 @@ export default function Pass5MasterApp() {
     handleResetFieldValue,
     updateFormValue,
     getCardProgress,
+    fieldAddedSets,
+    setOptionSetValue,
     handleApplyPickedOptions,
     helperToggleOption,
     newSet,
+    addOptionSet,
+    removeOptionSet,
   } = useFieldInteraction({
     formData,
     setFormData,
@@ -620,8 +626,6 @@ export default function Pass5MasterApp() {
 
   return (
     <div className={`h-screen overflow-hidden flex flex-col justify-between transition-colors duration-200 print:h-auto print:max-h-none print:overflow-visible ${isDark ? 'bg-[#18181b] text-[#f4f4f5]' : 'bg-[#fafaf9] text-[#18181b]'}`}>
-      {/* 1단계 분리 내장: HeaderProgress (읽기 전용 formData, undefined guard 포함) */}
-      <HeaderProgress projectKey={projectKey} formData={formData} isDark={isDark} />
       <div className="flex flex-1 overflow-hidden">
 
         {/* 사이드바 */}
@@ -1234,11 +1238,11 @@ export default function Pass5MasterApp() {
                                 fieldId={field.id}
                                 optionSets={field.optionSets || [['기술', '디자인', '마케팅'], ['온라인', '오프라인', '하이브리드']]}
                                 setsCount={optionSetCounts[field.id] ?? 1}
-                                value={customInputs[field.id]}
+                                value={(() => { const s = (customInputs[field.id] || '').toString(); const n = optionSetCounts[field.id] ?? 1; if (!s) return Array.from({length: n}, () => ''); const parts = s.split('/'); return Array.from({length: n}, (_, i) => parts[i] || ''); })()}
                                 isDark={isDark}
-                                onChange={(fid, v) => setCustomInputs(prev => ({ ...prev, [fid]: v.join('/') }))}
-                                onAddSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 }))}
-                                onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
+                                onChange={(fid, v) => { const n = optionSetCounts[fid] ?? 1; const padded = Array.from({length: n}, (_, i) => (v[i] || '').trim()); const joined = padded.join('/'); setCustomInputs(prev => ({ ...prev, [fid]: joined })); if(activeCardObj && joined.trim() !== '') { if(typeof setOptionSetValue === 'function') { padded.forEach((val, idx) => { if(val.trim() !== '') { const setKey = idx === 0 ? fid : `${fid}#set${idx + 1}`; setOptionSetValue(activeCardObj.id, fid, idx + 1, val); } else { const setKey = idx === 0 ? fid : `${fid}#set${idx + 1}`; updateFormValue(activeCardObj.id, setKey, ''); } }); } else { updateFormValue(activeCardObj.id, fid, joined); } } else if(activeCardObj && joined.trim() === '') handleResetFieldValue(activeCardObj.id, fid); }}
+                                onAddSet={(fid) => { setOptionSetCounts(prev => ({ ...prev, [fid]: (prev[fid] ?? 1) + 1 })); addOptionSet(fid); }}
+                                onRemoveSet={(fid) => { const currentCount = optionSetCounts[fid] ?? 1; const nextCount = Math.max(1, currentCount - 1); setOptionSetCounts(prev => ({ ...prev, [fid]: nextCount })); removeOptionSet(fid, Math.max(1, currentCount)); if(activeCardObj) { const removedKey = currentCount <= 1 ? `${fid}#set2` : `${fid}#set${currentCount}`; updateFormValue(activeCardObj.id, removedKey, ''); } setCustomInputs(prev => { const next = { ...prev, [fid]: prev[fid] }; delete next[fid]; return next; }); }}
                                 onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
                                 onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
                                 onEditSet={(fid, idx) => {
@@ -1254,6 +1258,8 @@ export default function Pass5MasterApp() {
                                 savePermanently={!!savePermanently[field.id]}
                                 onSavePermanentlyChange={(v) => setSavePermanently(prev => ({ ...prev, [field.id]: v }))}
                                 isEditMode={isEditMode}
+                                labelNames={setLabels[field.id] || {}}
+                                onLabelChange={(idx, val) => setSetLabels(prev => ({ ...prev, [field.id]: { ...prev[field.id], [idx]: val } }))}
                               />
                             </div>
 
@@ -1300,20 +1306,36 @@ export default function Pass5MasterApp() {
                             )}
 
 
-                            {currentVal && !isCustomMode && !isEditMode && (
-                              <div className="flex items-center justify-between mt-1">
-                                <div className="text-[11px] text-emerald-400 font-medium flex items-center gap-1">
-                                  <span>✓ 선택된 값:</span> <span className="opacity-90">{currentVal}</span>
+
+                            {(() => {
+                              const valStr = (customInputs[field.id] || '').toString();
+                              const totalSets = optionSetCounts[field.id] ?? 1;
+                              const raw = valStr.split('/');
+                              const padded = Array.from({ length: totalSets }, (_, i) => raw[i] || '');
+                              const hasAny = padded.some((s: string) => s.trim() !== '');
+                              if (!hasAny || isCustomMode || isEditMode) return null;
+                              return (
+                                <div className="flex items-center justify-between mt-1">
+                                  <div className="flex flex-row flex-wrap gap-x-3 gap-y-1 min-w-0 items-center">
+                                    {padded.map((part: string, i: number) => (
+                                      part.trim() !== '' && (
+                                        <div key={i} className="text-[11px] text-emerald-400 font-medium flex items-center gap-1 min-w-0 max-w-[240px]">
+                                          <span className="whitespace-nowrap">✓ {setLabels[field.id]?.[i] ?? `세트 ${i+1}`}</span>
+                                          <span className="truncate opacity-90">: {part}</span>
+                                        </div>
+                                      )
+                                    ))}
+                                  </div>
+                                  <button
+                                    type="button"
+                                    onClick={() => { handleResetFieldValue(activeCardObj.id, field.id); setCustomInputs(prev => ({...prev, [field.id]: ''})); }}
+                                    className="text-[10px] text-rose-400 hover:underline shrink-0 ml-2"
+                                  >
+                                    작성 전으로 돌리기
+                                  </button>
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleResetFieldValue(activeCardObj.id, field.id)}
-                                  className="text-[10px] text-rose-400 hover:underline"
-                                >
-                                  작성 전으로 돌리기
-                                </button>
-                              </div>
-                            )}
+                              );
+                            })()}
                           </div>
                         </div>
                       );
@@ -1498,9 +1520,7 @@ export default function Pass5MasterApp() {
                                     return (
                                       <div key={fIdx} className="text-xs leading-relaxed">
                                         <span className="opacity-60 font-medium">{f.label}: </span>
-                                        {val ? (
-                                          <span className="font-semibold">{val}</span>
-                                        ) : (
+                                        {val ? (() => { const parts = val.toString().split('/'); return <span className="font-semibold">{parts.map((p:string, idx:number) => { const lbl = setLabels[f.id]?.[idx] ?? `세트 ${idx+1}`; return p.trim() ? <span key={idx} className="block">{lbl}: {p.trim()}</span> : null; })}</span>; })() : (
                                           <span
                                             onClick={() => navigateTo('detail', { cardId: card.id })}
                                             className={`cursor-pointer font-medium transition hover:text-blue-400 hover:underline ${isDark ? 'text-zinc-500' : 'text-zinc-400'}`}
@@ -1782,6 +1802,18 @@ export default function Pass5MasterApp() {
                   },
                 ]
           }
+        />
+      )}
+
+      {/* DIAGNOSTIC PANEL — Agent 0/8 구조 진단용. 배포 시 제거 */}
+      {activeCardObj && (
+        <ProgressDebugPanel
+          formData={formData}
+          projectKey={projectKey}
+          cardId={activeCardObj.id}
+          card={activeCardObj}
+          getCardProgress={getCardProgress}
+          fieldAddedSets={fieldAddedSets}
         />
       )}
 

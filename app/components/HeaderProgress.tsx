@@ -1,31 +1,22 @@
-import React from 'react';
-import type { FormDataMap } from '@/lib/types';
+// PASS 5 — HeaderProgress (모듈 분리, 에이전트 8 규칙)
+// Props 기반 진행률 표시: 카드별 + 전체 진행률 (배터리/차트 스타일)
 
-export interface HeaderProgressProps {
-  projectKey: string;
-  formData: FormDataMap;
-  frameworkDataPerProject?: Record<string, unknown>;
-  isDark?: boolean;
+interface Props {
+  total: number;
+  completed: number;
+  step?: string;
+  progressPercent?: number;
 }
 
-export default function HeaderProgress({ projectKey, formData, isDark }: HeaderProgressProps) {
-  // Agent 7 방어: undefined guard + 타입 가드
-  const projStore = (formData && typeof formData === 'object' && formData[projectKey]) ? formData[projectKey] : {};
-  const progress = (projStore && typeof projStore === 'object' && 'progress' in projStore) ? (projStore as Record<string, unknown>).progress : 0;
+export default function HeaderProgress({ total, completed, step, progressPercent }: Props) {
+  const pct = progressPercent ?? (total > 0 ? Math.round((completed / total) * 100) : 0);
   return (
-    <header className={`w-full px-6 py-3 ${isDark ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-900'} border-b ${isDark ? 'border-zinc-800' : 'border-zinc-200'}`}>
-      <div className="flex items-center justify-between">
-        <h2 className="text-base font-semibold">PASS 5 — 진행률</h2>
-        <span className="text-sm opacity-80">{typeof progress === 'number' ? `${Math.round(progress)}%` : '—'}</span>
+    <div className="flex items-center gap-3 w-full">
+      <span className="text-xs text-gray-500">{step ?? '진행률'}</span>
+      <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+        <div className="h-full bg-emerald-500 rounded-full" style={{ width: `${pct}%` }} />
       </div>
-    </header>
+      <span className="text-xs font-bold">{completed}/{total}</span>
+    </div>
   );
-}
-// Agent 7 추가: runtime crash guard (try-catch wrapper for usage)
-export function safeHeaderProgress(props: HeaderProgressProps) {
-  try {
-    return <HeaderProgress {...props} />;
-  } catch {
-    return <header className="w-full px-6 py-3 bg-zinc-900 text-white">오류</header>;
-  }
 }

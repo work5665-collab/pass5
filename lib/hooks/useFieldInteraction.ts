@@ -86,6 +86,11 @@ export function useFieldInteraction({
       }
     }));
     setFieldModes(prev => ({ ...prev, [fieldId]: 'SELECT' }));
+    setFieldAddedSets(prev => {
+      const next = { ...prev };
+      delete next[fieldId];
+      return next;
+    });
   };
 
   const handleSelectChange = (fieldId: string, val: string, cardId: string) => {
@@ -138,7 +143,9 @@ export function useFieldInteraction({
 
   const setOptionSetValue = (cardId: string, fieldId: string, setIdx: number, value: string) => {
     // Agent 7 guard: handle array/index safely
-    try { updateFormValue(cardId, fieldId, value); } catch { /* silent fail guard */ }
+    // Option 1 (user's 1): setIdx-aware formData key so per-set values don't overwrite
+    const key = setIdx <= 1 ? fieldId : `${fieldId}#set${setIdx}`;
+    try { updateFormValue(cardId, key, value); } catch { /* silent fail guard */ }
   };
 
   const removeOptionSet = (fieldId: string, setIdx: number) => {
@@ -153,20 +160,32 @@ export function useFieldInteraction({
     if (!card || !card.fields) return 0;
     const projStore = formData[projectKey] || {};
     const cardStore = projStore[card.id] || {};
-    // 세트 항목 포함: fieldAddedSets는 같은 hook 내 상태이므로 안전 접근 가능
     let filledCount = 0;
-    let totalFields = 0;
+    let totalSets = 0;
     card.fields.forEach((f: any) => {
       const addedSets = fieldAddedSets[f.id] || [];
-      totalFields += 1 + addedSets.length; // 기본 필드 + 세트 항목(1,2,1 → 3)
-      // 선택 값이 채워졌으면 진행도 포함
-      const val = cardStore[f.id];
-      if (val && typeof val === 'string' && val.trim() !== '') filledCount++;
-      // 세트 항목이 존재하면 진행도 포함 (초기화/취소 시 fieldAddedSets에서 제거됨)
-      if (addedSets.length > 0) filledCount += addedSets.length;
+      // Image #12: 분모는 세트 수만 존재 (빈 세트도 포함)
+      const totalFieldSets = 1 + addedSets.length;
+      totalSets += totalFieldSets;
+      // Base value (setIdx 0)
+      const valBase = cardStore[f.id];
+      const baseFilled = !!(valBase && typeof valBase === 'string' && valBase.trim() !== '');
+      if (baseFilled) filledCount += 1;
+      // Added set values (setIdx 1..N) via set-aware keys — only non-empty counts toward 채움
+      addedSets.forEach((arr: string[], idx: number) => {
+        const originalIdx = addedSets.indexOf(arr);
+        const setKey = originalIdx <= 0 ? f.id : `${f.id}#set${originalIdx + 1}`;
+        const valSet = cardStore[setKey];
+        const setFilled = !!(valSet && typeof valSet === 'string' && valSet.trim() !== '');
+        if (setFilled) filledCount += 1;
+        // Fallback: if set array itself has content (direct value in array form)
+        const arrFilled = Array.isArray(arr) && arr.some((s: string) => s && s.trim() !== '');
+        if (arrFilled && !setFilled) filledCount += 1; // only if key not yet counted
+      });
     });
-    if (totalFields === 0) return 0;
-    return Math.round((filledCount / totalFields) * 100);
+    if (filledCount > totalSets) filledCount = totalSets;
+    if (totalSets === 0) return 0;
+    return Math.round((filledCount / totalSets) * 100);
   };
 
   const handleApplyPickedOptions = () => {
@@ -212,6 +231,8 @@ export function useFieldInteraction({
     setCustomInputs,
     savePermanently,
     setSavePermanently,
+    fieldAddedSets, // Agent 7/8: 패널 진단용 export
+    setFieldAddedSets,
     isPickerOpen,
     setIsPickerOpen,
     pickerStepKey,
