@@ -64,3 +64,16 @@
 5. **아키텍처 설계, 디자인 배치 및 구현 검증 가이드 제시** (에이전트 1, 3, 4)[cite: 1, 2]
 
 감정을 배제하고 직설적이며 객관적인 팩트 중심의 피드백을 제공하세요.
+
+---
+
+## 🧠 재사용 판단 노하우 — 상태·레이아웃 분리 원칙 (세션 실무 검증)
+
+본 세션 (`MultiOptionSelector` 세트별 주관식 입력 수정, Image #42~#45)에서 도출된 핵심 인사이트:
+
+1. **UI/레이아웃 변경 ≠ 상태/데이터 흐름 변경 — 분리 원칙**: 드롭다운 닫힘(자동), 버튼 연결, 선택 상태 유지 등 UI 동작은 내부 `setSelectVal`/`setCustomInputVal`로 해결 가능하지만, **적용 결과(세트별 저장, 배열 구조)**는 `page.tsx`의 `updateFormValue`/`current` 구조를 변경해야 함. 둘을 혼동하지 말고 각각의 제약(외부 분리 금지 / 데이터 바인딩 변경 금지)을 먼저 확인.
+2. **외부 파일 분리 금지 → 내부 상태 캡슐화**: 세트별 입력 텍스트 분리 필요 시 `Record<number,string>` (`setCustomInputs[idx]`) 같은 **컴포넌트 내부 상태**로 해결. `page.tsx` props 변경 없이 독립 관리 가능하며 `tsc --noEmit` 영향도 최소화됨.
+3. **하나의 콜백(적용하기)에서 두 상태 동시 처리 필요**: `onCustomSubmit` 호출 + 선택 상태 유지(`setSelectVal(idx,text)`) + 입력 초기화(`setCustomInputVal(idx,'')`)는 순서 보장 필요. 동기 실행이므로 안전하지만, 만약 비동기적이면 `await`/`.then()` 분리 검토필요.
+4. **세트별 독립 저장의 한계 — 구조 제약 확인**: `current`가 `string[]`이고 `updateFormValue`가 필드 단위 문자열 저장이면, 세트별 array(`current[idx]=text`)는 구조 변경 없이는 불가능. **구현 전에 현재 `value`/`current` 타입과 `handleCustomSubmit`의 저장 패턴을 확인**하고, 변경이 불가피하면 진행하지 말 것 (사용자 지시: "문제 생길 우려 있으면 진행하지마").
+5. **자동 닫힘은 선택 상태 초기화가 아님**: 적용 후 `setSelectVal(idx,'')`는 "취소"와 동일한 초기화 → 사용자가 원하는 "적용 후 자동 선택"은 `setSelectVal(idx, text)`여야 함. 의도한 UX를 명확히 구분 후 구현.
+6. **검증 순서: 코드 작성 → `tsc --noEmit` → 렌더링 구조 확인(Flex/Grid)**. 특히 `select`의 `value` 속성 변경만으로는 레이아웃 깨짐이 없으나, 조건 렌더링(`{isCustomMode && ...}`)의 부모 Flex 방향이 깨지지 않는지 최종 확인.

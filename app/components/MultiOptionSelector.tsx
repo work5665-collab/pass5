@@ -61,7 +61,9 @@ export default function MultiOptionSelector({
 }: MultiOptionSelectorProps) {
   try {
     const [setSelects, setSetSelects] = useState<Record<number,string>>({});
+    const [setCustomInputs, setSetCustomInputs] = useState<Record<number,string>>({});
     const setSelectVal = (idx:number,val:string) => setSetSelects(prev=>({...prev,[idx]:val}));
+    const setCustomInputVal = (idx:number,val:string) => setSetCustomInputs(prev=>({...prev,[idx]:val}));
     const current = toOptionArray(value);
     const total = Math.max(1, setsCount);
 
@@ -145,14 +147,14 @@ export default function MultiOptionSelector({
         {Array.from({ length: total }).map((_, idx) => (
           <div key={idx} className="w-full">
             <SetRow idx={idx} />
-            {current[idx] === 'direct' && (
+            {setSelects[idx] === 'CUSTOM_MODE' && (
               <div className={`w-full mt-1 p-4 rounded-xl border flex flex-col gap-3 ${isDark ? 'bg-zinc-900/90 border-blue-500/40' : 'bg-white border-blue-300 shadow-sm'}`} onMouseDown={(e)=>e.stopPropagation()} onDragStart={(e)=>{e.stopPropagation();e.preventDefault()}}>
                 <span className="text-[11px] font-bold text-blue-400">주관식 직접 작성</span>
                 <textarea
                   rows={2}
                   placeholder="원하시는 내용을 직접 상세히 적어주세요..."
-                  value={customInputValue || ''}
-                  onChange={(e) => onCustomInputChange?.(e.target.value)}
+                  value={setCustomInputs[idx] ?? (customInputValue || '')}
+                  onChange={(e) => { setCustomInputVal(idx, e.target.value); onCustomInputChange?.(e.target.value); }}
                   onFocus={() => onSetDragDisabled?.(true)}
                   onBlur={() => onSetDragDisabled?.(false)}
                   className={`w-full p-2.5 text-xs rounded-lg outline-none border ${isDark ? 'bg-zinc-800 border-zinc-700 text-white' : 'bg-zinc-50 border-zinc-300 text-zinc-900'}`}
@@ -169,8 +171,8 @@ export default function MultiOptionSelector({
                     <span>➕ 이 보기를 영구 옵션으로 누적 저장</span>
                   </label>
                   <div className="flex gap-2">
-                    <button type="button" onClick={() => { onCustomCancel?.(); const next=[...current]; next[idx]=''; onChange(fieldId,next); setSelectVal(idx,''); }} className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg">취소</button>
-                    <button type="button" onClick={() => onCustomSubmit?.(!!isEditMode)} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition">적용하기</button>
+                    <button type="button" onClick={() => { onCustomCancel?.(); const next=[...current]; next[idx]=''; onChange(fieldId,next); setSelectVal(idx,''); setCustomInputVal(idx,''); }} className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg">취소</button>
+                    <button type="button" onClick={() => { const text = setCustomInputs[idx] || customInputValue || ''; onCustomSubmit?.(!!isEditMode); if(text) setSelectVal(idx, text); else setSelectVal(idx,''); setCustomInputVal(idx,''); }} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition">적용하기</button>
                   </div>
                 </div>
               </div>

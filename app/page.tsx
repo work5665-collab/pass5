@@ -1241,7 +1241,10 @@ export default function Pass5MasterApp() {
                                 onRemoveSet={(fid) => setOptionSetCounts(prev => ({ ...prev, [fid]: Math.max(1, (prev[fid] ?? 1) - 1) }))}
                                 onOpenImportPicker={(fid) => { setPickerTargetType('existingField'); setPickerTargetFieldId(fid); setIsPickerOpen(true); }}
                                 onAiSuggest={(fid, idx) => console.log('AI 추천', fid, idx)}
-                                onEditSet={(fid, idx) => console.log('개별 수정', fid, idx)}
+                                onEditSet={(fid, idx) => {
+                                  const sel = optionsList?.[idx];
+                                  if (sel) handleStartEditOption(fid, sel);
+                                }}
                                 dropdownOptions={optionsList}
                                 customInputValue={customInputs[field.id] || ''}
                                 onCustomInputChange={(val) => setCustomInputs(prev => ({ ...prev, [field.id]: val }))}
@@ -1252,18 +1255,6 @@ export default function Pass5MasterApp() {
                                 onSavePermanentlyChange={(v) => setSavePermanently(prev => ({ ...prev, [field.id]: v }))}
                                 isEditMode={isEditMode}
                               />
-
-
-                              {currentVal && !isCustomMode && !isEditMode && (
-                                <button
-                                  type="button"
-                                  onClick={() => handleStartEditOption(field.id, currentVal)}
-                                  className="px-3 py-3 text-xs font-semibold rounded-xl bg-blue-600/20 hover:bg-blue-600 hover:text-white text-blue-400 transition whitespace-nowrap"
-                                  title="선택된 문장 바로 수정"
-                                >
-                                  ✏️ 문장 수정
-                                </button>
-                              )}
                             </div>
 
                             {(isCustomMode || isEditMode) && (

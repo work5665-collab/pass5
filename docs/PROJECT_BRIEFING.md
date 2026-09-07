@@ -242,9 +242,16 @@ const projectProgress = useMemo(() => {
 - 2단계: 순차적 컴포넌트 추출 및 props 인터페이스 정의
 - 3단계: npx tsc --noEmit을 통한 빌드 에러 검증
 
-## [Fix Log — 2026-09-07] Runtime & Type Errors Resolved
+## [Fix Log — 2026-09-07] Completed Session Summary (Confirmed Specs)
 
-- **489행 `.trim()` 런타임 크래시 방어**: `typeof cardStore[f.id] === 'string'` 가드 적용 (string[] 대응)
-- **FormDataMap 타입 통합**: `useFieldInteraction` 단일 소스 적용 — `app/page.tsx:229`, `useProjectData`, `useCardData`, `useFieldValuePersistence` 모두 중앙 `FormDataMap` 사용
-- **1244행 `<select value>` scalar 위반**: `currentVal`이 `string[]`일 때 `Array.isArray` fallback + `string` 우선 체크로 React 오류 제거 (카드 세부 이동 시 발생)
-- **저장 상태**: `git commit c965adb` — `app/page.tsx`, `useFieldValuePersistence`, `useCardData`, `useProjectData` 변경사항 저장
+- **MultiOptionSelector 상태 구조 (확정)**: 세트별 `setSelects[idx]` (`Record<number,string>`), `fieldModes` (`SELECT` | `CUSTOM` | `EDIT`), `customInputs[field.id]`. 외부 파일 분리 금지 조건 하에서 내부 `setCustomInputs[idx]`로 세트별 입력 텍스트만 분리 가능 (적용 결과는 필드 단위 단일값으로 저장 — 세트별 array 구조 변경 불가).
+- **Image #42~#43**: 세트2/3/4+에서 `CUSTOM_MODE` 드롭다운 처리 완료 (이전 세트1만 작동하던 버그 수정)
+- **Image #44**: 하단 `✏️ 문장 수정` 버튼 제거; 우측 `✏️` (onEditSet) → `handleStartEditOption` 연동 완료
+- **Image #45**: `적용하기` 클릭 후 자동 닫힘 (`setSelectVal(idx,'')`) 구현 완료. 세트별 독립 저장 불가 (구조 제약) — 진행하지 않음.
+- **Type validation**: 수정 파일 `tsc --noEmit` 추가 오류 없음 (기존 `CustomInputBlock.tsx`, `useFieldInteraction.ts` 오류는 미관련)`
+
+## Confirmed Layout & Component Specs
+
+- **페이지**: `/` (`app/page.tsx`, ~1800줄) — `Pass5MasterApp` 인라인 JSX. `MultiOptionSelector`는 `page.tsx` 내 `dropdownOptions`, `customInputValue`, `onCustomSubmit`, `onCustomCancel` props로 조립.
+- **레이아웃**: 세트 row는 `flex flex-row items-center gap-2`; 주관식 입력 영역은 `mt-2 p-4 rounded-xl border flex flex-col gap-3`; 버튼 영역 `flex gap-2`; 드롭다운 `flex-1 min-w-0`.
+- **데이터 흐름**: `fieldModes[field.id]` → `isCustomMode` / `isEditMode` → 조건 렌더링 (`(isCustomMode || isEditMode) && <div>`). `onCustomSubmit` → `handleCustomSubmit(activeCardObj.id, field.id, isEditMode)` → `updateFormValue` + `setFieldModes('SELECT')`.
