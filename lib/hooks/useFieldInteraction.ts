@@ -26,6 +26,7 @@ export function useFieldInteraction({
   setNewFieldOptionsStr,
 }: UseFieldInteractionParams) {
   // 필드 입력 모드 상태
+  const [fieldAddedSets, setFieldAddedSets] = useState<Record<string, string[][]>>({});
   const [customOptions, setCustomOptions] = useState<Record<string, string[]>>({});
   const [fieldModes, setFieldModes] = useState<Record<string, 'SELECT' | 'CUSTOM' | 'EDIT'>>({});
   const [customInputs, setCustomInputs] = useState<Record<string, string>>({});

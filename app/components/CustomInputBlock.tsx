@@ -1,4 +1,5 @@
 import React from 'react';
+import type { Dispatch, SetStateAction } from 'react';
 
 export interface CustomInputBlockProps {
   isCustomMode: boolean;
@@ -12,7 +13,7 @@ export interface CustomInputBlockProps {
   activeCardObj: any;
   field: any;
   handleCustomSubmit: (cardId: string, fieldId: string, isEdit: boolean) => void;
-  setFieldModes: (prev: Record<string, string>) => void;
+  setFieldModes: Dispatch<SetStateAction<Record<string, 'SELECT' | 'CUSTOM' | 'EDIT'>>>;
 }
 
 export default function CustomInputBlock({
@@ -55,7 +56,7 @@ export default function CustomInputBlock({
           <div className="flex gap-2">
             <button
               type="button"
-              onClick={() => setFieldModes((prev: Record<string, string>) => ({ ...prev, [fieldId]: 'SELECT' }))}
+              onClick={() => setFieldModes((prev) => ({ ...prev, [fieldId]: 'SELECT' }))}
               className="px-3 py-1.5 bg-zinc-600 text-white text-xs rounded-lg"
             >
               취소
